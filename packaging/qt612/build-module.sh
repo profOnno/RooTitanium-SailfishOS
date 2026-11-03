@@ -15,6 +15,11 @@ esac
 SRC=$R/scratch/qt612-src/$M-everywhere-src-6.12.0
 BLD=$R/scratch/qt612/build-$ARCH/$M
 LOG=$R/scratch/qt612/log-$ARCH-$M.log
+# qtbase needs the chum SFOS patches before it can compile (statx, sb2 file
+# copies, ...). Idempotent via a marker in the source tree.
+if [ "$M" = qtbase ]; then
+    "$R/packaging/qt612/prepare-qtbase.sh"
+fi
 mkdir -p $BLD
 # The build runs as the SDK user inside the chroot; when this script is invoked
 # as root the directory would otherwise be root-owned and unwritable.

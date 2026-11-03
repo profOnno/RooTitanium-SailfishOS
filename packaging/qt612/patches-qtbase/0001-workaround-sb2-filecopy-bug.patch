@@ -1,0 +1,77 @@
+diff --git a/src/tools/syncqt/main.cpp b/src/tools/syncqt/main.cpp
+index 5df7b03fd5..94c59feb7c 100644
+--- a/src/tools/syncqt/main.cpp
++++ b/src/tools/syncqt/main.cpp
+@@ -30,6 +30,12 @@
+ #include <stdexcept>
+ #include <array>
+ 
++#include <fcntl.h>
++#include <unistd.h>
++#include <limits.h>
++#include <sys/sendfile.h>
++#include <sys/stat.h>
++
+ enum ErrorCodes {
+     NoError = 0,
+     InvalidArguments,
+@@ -1684,6 +1690,40 @@ SyncScanner::makeHeaderAbsolute(const std::string &filename) const
+     return utils::normilizedPath(filename);
+ }
+ 
++int OSCopyFile(const char* source, const char* destination)
++{
++    int result = 0;
++    int input, output;
++    if ((input = open(source, O_RDONLY)) == -1)
++    {
++        return -1;
++    }
++    // Create new or truncate existing at destination
++    if ((output = creat(destination, 0644)) == -1)
++    {
++        close(input);
++        return -1;
++    }
++
++    // sendfile will work with non-socket output (i.e. regular file) under
++    // Linux 2.6.33+ and some other unixy systems.
++    struct stat file_stat = {0};
++    result = fstat(input, &file_stat);
++    off_t copied = 0;
++    while (result == 0 && copied < file_stat.st_size) {
++        ssize_t written = sendfile(output, input, &copied, SSIZE_MAX);
++        copied += written;
++        if (written == -1) {
++            result = -1;
++        }
++    }
++
++    close(input);
++    close(output);
++
++    return result;
++}
++
+ bool SyncScanner::updateOrCopy(const std::filesystem::path &src,
+                                const std::filesystem::path &dst) noexcept
+ {
+@@ -1696,6 +1736,7 @@ bool SyncScanner::updateOrCopy(const std::filesystem::path &src,
+         return true;
+     }
+ 
++#if 0
+     std::error_code ec;
+     std::filesystem::copy(src, dst, std::filesystem::copy_options::update_existing, ec);
+     if (ec) {
+@@ -1716,6 +1757,10 @@ bool SyncScanner::updateOrCopy(const std::filesystem::path &src,
+             return false;
+         }
+     }
++#endif
++    if (OSCopyFile(src.c_str(), dst.c_str()) != 0) {
++        std::cerr << "Unable to copy file: " << src << " to " << dst << std::endl;
++    }
+     return true;
+ }
+ 

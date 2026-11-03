@@ -1,0 +1,12 @@
+diff --git a/src/corelib/io/qstorageinfo_linux.cpp b/src/corelib/io/qstorageinfo_linux.cpp
+index f5be2454a24..5b4d21b84ae 100644
+--- a/src/corelib/io/qstorageinfo_linux.cpp
++++ b/src/corelib/io/qstorageinfo_linux.cpp
+@@ -103,6 +103,7 @@ static inline quint64 mountIdForPath(int fd)
+ {
+     if (fd < 0)
+         return 0;
++#undef STATX_MNT_ID
+ #if defined(STATX_BASIC_STATS) && defined(STATX_MNT_ID)
+     // STATX_MNT_ID was added in kernel v5.8
+     struct statx st;
