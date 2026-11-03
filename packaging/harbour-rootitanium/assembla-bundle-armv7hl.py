@@ -17,9 +17,9 @@ Alla fine verifica:
   - che i NEEDED non soddisfatti dal bundle siano gli stessi "di sistema"
     del bundle aarch64 (libc, EGL, wayland, ...), cosi' non manca niente.
 
-Va lanciato DENTRO l'engine SDK (i target stanno in un volume docker):
-  docker exec -u mersdk sailfish-sdk-build-engine_RootGPT python3 \
-     <repo>/scratch/assembla-bundle-armv7hl.py --engine <stage> --smoke <bin>
+Va lanciato dentro la SDK chroot locale (i target stanno lì):
+  source packaging/sdk-local.sh
+  sdk_run "python3 <repo>/scratch/assembla-bundle-armv7hl.py --engine <stage> --smoke <bin>"
 """
 import argparse, os, shutil, subprocess, sys
 

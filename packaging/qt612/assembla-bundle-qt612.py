@@ -16,10 +16,10 @@ sono installati i moduli 6.12 e il motore 6.140:
 Tutti gli ELF vengono strippati. Alla fine verifica che i NEEDED non
 soddisfatti siano solo quelli "di sistema" gia' attesi dal bundle 2.x.
 
-Da lanciare DENTRO l'engine SDK:
-  docker exec -u mersdk sailfish-sdk-build-engine_RootGPT python3 \
-    <repo>/packaging/qt612/assembla-bundle-qt612.py --arch aarch64 \
-    --smoke <webengine-smoke> --position <plugin> --maliit <plugin>
+Da lanciare dentro la SDK chroot locale (finisci-motore.sh lo fa già):
+  source packaging/sdk-local.sh
+  sdk_run "python3 <repo>/packaging/qt612/assembla-bundle-qt612.py --arch aarch64 \
+    --smoke <webengine-smoke> --position <plugin> --maliit <plugin>"
 """
 import argparse, os, shutil, subprocess, sys
 

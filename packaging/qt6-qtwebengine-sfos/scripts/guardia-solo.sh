@@ -1,17 +1,17 @@
 #!/bin/bash
 # Guardia termica VRM SOLO (senza lanciare build) da attaccare a una build
-# qt6-qtwebengine gia' in corso dentro l'engine docker.
+# qt6-qtwebengine gia' in corso.
 #
-# Nata il 7 lug 2026 18:4x: la guardia originale e' stata terminata per il bug
-# del restore (--cpus 0 non sblocca), ma la build dentro l'engine e' rimasta
-# viva orfana (sfdk lascia il ninja remoto in esecuzione). Questo watcher
-# ripristina la protezione termica SENZA toccare la build: monitora VRM e
-# throttla/ripristina l'engine con il restore CORRETTO (--cpus 16, non 0).
-# Termina da solo quando il processo sfdk della build sparisce.
+# Nata il 7 lug 2026 18:4x per la macchina fisica (sensore VRM + engine Docker).
+# Sulla SDK chroot locale (VM/LXD) non c'è né sensore né container: lo script
+# lo dice e termina con 0, invece di restare inattivo per sempre.
+#
+# Termina da solo quando il processo della build sparisce.
 
 set -u
 # Root del repo, derivata dalla posizione dello script (scripts/ è 3 livelli sotto)
 REPO=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)
+source "$REPO/packaging/sdk-local.sh"
 ENGINE=sailfish-sdk-build-engine_RootGPT
 CHIP=it8689-isa-0a40
 SOGLIA_STOP=85
@@ -24,6 +24,12 @@ BUILDLOG=$REPO/packaging/qt6-qtwebengine-sfos/build/build.log
 
 leggi_vrm() { sensors "$CHIP" 2>/dev/null | awk -F'[+.]' '/^VRM:/ {print $2}'; }
 nota() { echo "$(date '+%F %T')  $*" | tee -a "$GUARDLOG"; }
+
+if ! command -v sensors >/dev/null 2>&1 || [ -z "$(leggi_vrm)" ] ||
+   ! sdk_docker_engine_available; then
+    echo "guardia termica non disponibile su questa macchina (sensore VRM o container Docker assenti): niente da fare"
+    exit 0
+fi
 
 nota "=== [guardia-solo] attaccata a build in corso. restore=${CORE_PIENI} core. ==="
 ridotto=0
@@ -51,4 +57,4 @@ while pgrep -f 'cmake --build . -j16 --verbose' >/dev/null; do
     fi
     sleep "$INTERVALLO"
 done
-nota "=== [guardia-solo] build terminata (processo sfdk sparito). Watcher chiuso. ==="
+nota "=== [guardia-solo] build terminata (processo sparito). Watcher chiuso. ==="

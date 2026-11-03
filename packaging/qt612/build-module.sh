@@ -5,6 +5,7 @@
 # ma Release senza -g (si strippa comunque nel bundle).
 set -euo pipefail
 R=$(cd "$(dirname "$0")/../.." && pwd)
+source "$R/packaging/sdk-local.sh"
 M=$1; shift
 ARCH=${ARCH:-aarch64}
 case $ARCH in
@@ -16,10 +17,9 @@ BLD=$R/scratch/qt612/build-$ARCH/$M
 LOG=$R/scratch/qt612/log-$ARCH-$M.log
 mkdir -p $BLD
 FL="-O2 -pipe -Wp,-D_FORTIFY_SOURCE=2 -fexceptions -fstack-protector --param=ssp-buffer-size=4 $MARCH"
-E="docker exec -u mersdk sailfish-sdk-build-engine_RootGPT"
 {
 echo "=== $(date '+%F %T') configure $M ($ARCH)"
-$E bash -c "cd $BLD && CFLAGS='$FL' CXXFLAGS='$FL' sb2 -t $T cmake --fresh -S $SRC -B $BLD -GNinja \
+sdk_run "cd $BLD && CFLAGS='$FL' CXXFLAGS='$FL' sb2 -t $T cmake --fresh -S $SRC -B $BLD -GNinja \
   -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr -DBUILD_SHARED_LIBS=ON \
   -DINSTALL_ARCHDATADIR=/usr/$L/qt6 -DINSTALL_BINDIR=/usr/$L/qt6/bin -DINSTALL_LIBDIR=/usr/$L \
   -DINSTALL_LIBEXECDIR=/usr/$L/qt6/libexec -DINSTALL_DATADIR=/usr/share/qt6 \
@@ -38,7 +38,7 @@ echo "=== $(date '+%F %T') build $M"
 SORV=$!; trap 'kill $SORV 2>/dev/null' EXIT
 for tentativo in $(seq 1 30); do
   inizio=$(wc -l < $LOG)
-  if $E bash -c "cd $BLD && sb2 -t $T cmake --build $BLD -j${J:-12} -- -k 0"; then break; fi
+  if sdk_run "cd $BLD && sb2 -t $T cmake --build $BLD -j${J:-12} -- -k 0"; then break; fi
   n=$(find $BLD -type f -perm 000 | wc -l)
   # errori di questo giro che NON sono di permesso = errore vero → stop
   veri=$(tail -n +$((inizio+1)) $LOG | grep -E "error:|Error copying|Unable to open" | grep -vcE "Permission denied|Error copying|Unable to open" || true)
@@ -48,6 +48,6 @@ for tentativo in $(seq 1 30); do
   [ $tentativo -lt 30 ] || { echo "troppi tentativi"; exit 1; }
 done
 echo "=== $(date '+%F %T') install $M"
-$E bash -c "cd $BLD && sb2 -t $T -m sdk-install -R cmake --install $BLD"
+sdk_run "cd $BLD && sb2 -t $T -m sdk-install -R cmake --install $BLD"
 echo "=== $(date '+%F %T') FATTO $M"
 } > $LOG 2>&1

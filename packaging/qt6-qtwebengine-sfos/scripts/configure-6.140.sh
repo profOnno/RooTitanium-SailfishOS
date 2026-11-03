@@ -14,6 +14,7 @@
 #   TARGET_OVR=<target> ./apply-build-fixes.sh gn
 set -euo pipefail
 REPO=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)
+source "$REPO/packaging/sdk-local.sh"
 ARCH=${ARCH:-aarch64}
 case $ARCH in
   aarch64) T=SailfishOS-5.1.0.11-aarch64-qt612; L=lib64; MARCH=-march=armv8-a ;;
@@ -24,7 +25,7 @@ SRC=$REPO/scratch/qtwebengine-6.140
 BLD=$REPO/scratch/qt612/build-$ARCH/qtwebengine
 mkdir -p "$BLD"
 FL="-O2 -pipe -Wp,-D_FORTIFY_SOURCE=2 -fexceptions -fstack-protector --param=ssp-buffer-size=4 $MARCH"
-docker exec -u mersdk sailfish-sdk-build-engine_RootGPT bash -c "cd $BLD && NINJAFLAGS='${NINJAFLAGS:--j10}' CFLAGS='$FL' CXXFLAGS='$FL' \
+sdk_run "cd $BLD && NINJAFLAGS='${NINJAFLAGS:--j10}' CFLAGS='$FL' CXXFLAGS='$FL' \
  sb2 -t $T cmake --fresh -S $SRC -B $BLD -GNinja \
   -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr -DBUILD_SHARED_LIBS=ON \
   -DCMAKE_TOOLCHAIN_FILE=/usr/$L/cmake/Qt6/qt.toolchain.cmake \

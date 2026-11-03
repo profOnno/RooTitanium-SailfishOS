@@ -1,11 +1,24 @@
 #!/bin/bash
-# Compila il plugin di posizione (task 2.5 #4) via sb2. Da eseguire DENTRO l'engine:
-#   docker exec -u mersdk sailfish-sdk-build-engine_RootGPT bash <repo>/packaging/rt-position-plugin/build.sh
-# ARCH=armv7hl per il 32 bit. Output: libqtposition_rtgeoclue1.so qui accanto,
-# da installare nel bundle in plugins/position/.
+# Compila il plugin di posizione (task 2.5 #4) via sb2.
+# Si può lanciare dalla workstation:
+#   ARCH=aarch64 packaging/rt-position-plugin/build.sh
+# Lo script rientra da solo nella SDK chroot locale (vedi packaging/sdk-local.sh).
+# ARCH=armv7hl per il 32 bit, QT612=1 contro lo stack Qt 6.12 del target clonato.
+# Output: libqtposition_rtgeoclue1.so qui accanto, da installare nel bundle in
+# plugins/position/.
 set -e
-cd "$(dirname "$0")"
+HERE=$(cd "$(dirname "$0")" && pwd)
 ARCH=${ARCH:-aarch64}
+
+# Fuori dalla SDK non c'è sb2: rientra nella chroot e rilancia questo script.
+if ! command -v sb2 >/dev/null 2>&1; then
+  REPO=$(cd "$HERE/../.." && pwd)
+  source "$REPO/packaging/sdk-local.sh"
+  sdk_run "HERE='$HERE' ARCH='$ARCH' QT612='${QT612:-}' bash '$HERE/build.sh'"
+  exit $?
+fi
+
+cd "$HERE"
 case "$ARCH" in
   aarch64) T=SailfishOS-5.1.0.11-aarch64.default; L=lib64 ;;
   armv7hl) T=SailfishOS-5.1.0.11-armv7hl;         L=lib ;;

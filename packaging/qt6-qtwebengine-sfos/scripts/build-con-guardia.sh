@@ -5,20 +5,15 @@
 #      J=16 SOGLIA_STOP=90 ./build-con-guardia.sh   (giro piu' spinto, presidiato)
 #
 # TARGETS_OVR="A B": costruisce solo quei target (es. senza QtPdf, che il bundle non usa).
-# - Lancia `cmake --build . -j$J` nel target 5.1 aarch64 via sfdk (build dir
-#   già configurata, vedi configure-only.sh se serve ripartire da zero).
-# - Ogni INTERVALLO s legge la temperatura VRM (sensors it8689-isa-0a40).
-# - >= SOGLIA_STOP °C: strozza l'engine docker a 2 core (docker update --cpus 2).
-#   NON si usa SIGSTOP/docker pause: congelerebbe anche sshd dell'engine e
-#   la sessione sfdk cadrebbe, uccidendo la build. Con 2 core il calore
-#   crolla ma la connessione resta viva.
-# - <= SOGLIA_RIPRESA °C: torna a CORE_PIENI core (mai --cpus 0, vedi nota sotto).
+# - Lancia `cmake --build . -j$J` nel target 5.1 via sb2 DENTRO la SDK chroot
+#   locale (vedi packaging/sdk-local.sh; non serve piu' il container Docker).
+# - Se il sensore VRM esiste (macchina fisica), ogni INTERVALLO s ne legge la
+#   temperatura e, se necessario, strozza i core del container Docker (solo se
+#   quel container esiste). Su una VM senza `sensors` la guardia termica si
+#   disattiva da sola e resta attiva quella anti-stallo.
 # - Anti-stallo: ogni 15 min verifica che il log della build cresca e che
 #   l'avanzamento [n/m] si muova; se tutto è fermo logga un ALLARME con
-#   diagnostica (CPU processi engine, coda del log) e manda notify-send.
-#   NON uccide mai la build da solo: un falso positivo (es. link finale
-#   lungo) costerebbe ore. Sta all'utente decidere guardando la diagnostica:
-#   processi a CPU alta = probabile lavoro lungo legittimo; tutti ~0% = stallo.
+#   diagnostica e manda notify-send (se c'è). NON uccide mai la build da solo.
 #
 # Log: build.log (output build), guardia-vrm.log (eventi termici+stallo).
 
@@ -26,6 +21,7 @@ set -u
 
 # Root del repo, derivata dalla posizione dello script (scripts/ è 3 livelli sotto)
 REPO=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)
+source "$REPO/packaging/sdk-local.sh"
 # Versione del motore: si legge dallo spec, così build e pacchetto non divergono.
 # Si può forzare con VER=6.8.3 ./build-con-guardia.sh (es. per ricompilare il
 # tree vecchio senza toccare lo spec).
@@ -70,7 +66,19 @@ leggi_vrm() { sensors "$CHIP" 2>/dev/null | awk -F'[+.]' '/^VRM:/ {print $2}'; }
 
 nota() { echo "$(date '+%F %T')  $*" | tee -a "$GUARDLOG"; }
 
-ripristina_cpu() { docker update --cpus "$CORE_PIENI" "$ENGINE" >/dev/null 2>&1; }
+# Il throttle usa il container Docker SOLO se esiste davvero (macchina fisica
+# del 2026); sulla SDK chroot locale non c'è niente da strozzare e la guardia
+# termica resta spenta.
+ripristina_cpu() {
+    if sdk_docker_engine_available; then
+        docker update --cpus "$CORE_PIENI" "$ENGINE" >/dev/null 2>&1
+    fi
+}
+throttle_cpu() {
+    if sdk_docker_engine_available; then
+        docker update --cpus "$CORE_RIDOTTI" "$ENGINE" >/dev/null 2>&1
+    fi
+}
 # NOTA (bug scoperto 7 lug 18:21): "docker update --cpus 0" NON rimuove il
 # limite su questo container (resta a NanoCpus del set precedente, es. 2 core,
 # nonostante il log dica "ripristinati tutti i core"). Fix: usare un valore
@@ -81,9 +89,12 @@ ripristina_cpu() { docker update --cpus "$CORE_PIENI" "$ENGINE" >/dev/null 2>&1;
 # --- controlli preliminari -------------------------------------------------
 [ -d "$BUILDDIR" ] || { echo "ERRORE: build dir mancante: $BUILDDIR"; exit 1; }
 t=$(leggi_vrm)
-[ -n "$t" ] || { echo "ERRORE: lettura VRM fallita (sensors $CHIP)"; exit 1; }
-command -v sfdk >/dev/null || PATH=$PATH:$HOME/SailfishOS/bin
-command -v sfdk >/dev/null || { echo "ERRORE: sfdk non trovato"; exit 1; }
+if [ -n "$t" ]; then
+    GUARDIA_TERMICA=1
+else
+    GUARDIA_TERMICA=0
+    nota "ATTENZIONE: sensore VRM non disponibile ($CHIP): guardia termica OFF, resta l'anti-stallo"
+fi
 
 # --- ninja interno: limite di parallelismo ---------------------------------
 # QtWebEngine lancia un ninja INTERNO per Chromium (righe "/usr/bin/ninja -C
@@ -100,7 +111,7 @@ NINJA_INTERNO_J=${NINJA_INTERNO_J:-10}
 fissa_ninja_interno() {
     local f=$BUILDDIR/build.ninja senza con
     nota "build.ninja: rigenerazione se serve, poi controllo del -j del ninja interno"
-    docker exec -u mersdk "$ENGINE" bash -lc "cd $BUILDDIR && sb2 -t $TARGET cmake --build . --target build.ninja" \
+    sdk_run "cd $BUILDDIR && sb2 -t $TARGET cmake --build . --target build.ninja" \
         >>"$GUARDLOG" 2>&1 || { nota "ERRORE: rigenerazione di build.ninja fallita"; return 1; }
     sed -i -E "s#(/usr/bin/ninja) -C #\1 -j$NINJA_INTERNO_J -C #g" "$f"
     senza=$(grep -cE '/usr/bin/ninja -C ' "$f")
@@ -122,10 +133,10 @@ nota "=== Avvio build $ARCH -j${J} via sb2 (cross-gcc NATIVO) con guardia VRM (r
 # sb2 mappa /usr/bin/c++ sul cross-compiler host-nativo (opt/cross, gcc 13.4.0):
 # niente emulazione qemu -> ~5-10x piu' veloce E niente tetto ~4 GB/processo di
 # qemu (i mega-TU tipo browser_interface_binders compilano). cmake/ninja girano
-# emulati (leggeri); i compile vanno nativi. Eseguito come utente mersdk (owner
-# dei target sb2). J = concorrenza allineata ai core concessi (RAM piu sicura coi
+# emulati (leggeri); i compile vanno nativi. Eseguito come utente SDK (owner dei
+# target sb2). J = concorrenza allineata ai core concessi (RAM piu sicura coi
 # compile nativi che possono usare fino a ~4 GB ciascuno).
-docker exec -u mersdk "$ENGINE" bash -lc "cd $BUILDDIR && sb2 -t $TARGET cmake --build . -j$J --verbose ${TARGETS_OVR:+--target $TARGETS_OVR}" \
+sdk_run "cd $BUILDDIR && sb2 -t $TARGET cmake --build . -j$J --verbose ${TARGETS_OVR:+--target $TARGETS_OVR}" \
     >"$BUILDLOG" 2>&1 &
 BUILD_PID=$!
 
@@ -141,9 +152,9 @@ stall_ultimo_check=$(date +%s)
 stall_conta=0
 while kill -0 "$BUILD_PID" 2>/dev/null; do
     t=$(leggi_vrm)
-    if [ -n "$t" ]; then
+    if [ "$GUARDIA_TERMICA" -eq 1 ] && [ -n "$t" ]; then
         if [ "$ridotto" -eq 0 ] && [ "$t" -ge "$SOGLIA_STOP" ]; then
-            docker update --cpus "$CORE_RIDOTTI" "$ENGINE" >/dev/null
+            throttle_cpu
             ridotto=1
             pause_totali=$((pause_totali + 1))
             nota "VRM ${t}°C >= ${SOGLIA_STOP}°C: engine ridotto a ${CORE_RIDOTTI} core (pausa n.${pause_totali})"
@@ -160,7 +171,7 @@ while kill -0 "$BUILD_PID" 2>/dev/null; do
             nota "VRM ${t}°C, regime ${stato}, avanzamento ${ultima_riga:-n/d}"
             ultimo_report=$adesso
         fi
-    else
+    elif [ "$GUARDIA_TERMICA" -eq 1 ]; then
         nota "ATTENZIONE: lettura VRM fallita, riprovo"
     fi
 
@@ -176,8 +187,8 @@ while kill -0 "$BUILD_PID" 2>/dev/null; do
             if [ "$size" -eq "$stall_prec_size" ] && [ "$marca" = "$stall_prec_marca" ]; then
                 stall_conta=$((stall_conta + 1))
                 nota "⚠️ ALLARME STALLO n.${stall_conta}: nessun output da $((STALL_FINESTRA / 60)) min (log fermo a ${size} byte, ultimo passo ${marca:-n/d})"
-                nota "Diagnostica — processi engine per CPU (alta = lavoro lungo legittimo, tutti ~0 = stallo vero):"
-                docker top "$ENGINE" -eo pid,pcpu,etime,comm --sort=-pcpu 2>/dev/null | head -8 | tee -a "$GUARDLOG"
+                nota "Diagnostica — processi per CPU (alta = lavoro lungo legittimo, tutti ~0 = stallo vero):"
+                ps -eo pid,pcpu,etime,comm --sort=-pcpu 2>/dev/null | head -8 | tee -a "$GUARDLOG"
                 nota "Diagnostica — ultime righe del build log:"
                 tail -c 500 "$BUILDLOG" | tail -3 | tee -a "$GUARDLOG"
                 command -v notify-send >/dev/null 2>&1 && \

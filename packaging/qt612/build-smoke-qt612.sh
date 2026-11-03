@@ -1,7 +1,8 @@
 #!/bin/bash
 # webengine-smoke (main.cpp) contro Qt 6.12 + QtWebEngine 6.140, nel target
-# …-qt612 dove il motore e' stato installato (cmake --install). Da eseguire
-# DENTRO l'engine come mersdk:  ARCH=aarch64 bash build-smoke-qt612.sh
+# …-qt612 dove il motore e' stato installato (cmake --install). Va eseguito
+# dentro la SDK chroot locale:  ARCH=aarch64 bash build-smoke-qt612.sh
+# (finisci-motore.sh lo lancia già così, via packaging/sdk-local.sh).
 set -e
 R=$(cd "$(dirname "$0")/../.." && pwd)
 ARCH=${ARCH:-aarch64}
