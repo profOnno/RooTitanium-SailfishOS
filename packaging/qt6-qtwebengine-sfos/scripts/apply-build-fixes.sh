@@ -44,6 +44,8 @@ ENGINE=sailfish-sdk-build-engine_RootGPT
 # qemu-<arch>-static 10.x dell'HOST, copiato nella home (dev'essere sotto /home:
 # /tmp NON e' condiviso col container). Si sposta con QEMU10=...
 QEMU10=${QEMU10:-$HOME/$QEMUBIN}
+# Native x86 tooling used for build-time Python (see py-sb2.sh).
+TOOLING=${TOOLING:-SailfishOS-latest}
 
 die() { echo "ERRORE: $*" >&2; exit 1; }
 [ -d "$BT" ] || die "build tree non trovato: $BT (VER=$VER giusto?)"
@@ -144,12 +146,14 @@ fix_gnqemu() {
   # python giusto e i pkg-config del target (verificato: Qt6Core 6.12.0).
   # generate_bindings.py va col python NATIVO del tooling: sotto quello emulato
   # il suo pool multiprocessing si blocca senza errori (vedi fix_pynativo).
-  cat > "$BT/install/bin/py-sb2.sh" <<'PYSB2'
+  cat > "$BT/install/bin/py-sb2.sh" <<PYSB2
 #!/bin/sh
-case "$1" in
-  */generate_bindings.py) exec /srv/mer/toolings/SailfishOS-5.1.0.11/usr/bin/python3 "$@" ;;
-esac
-exec /usr/bin/python3 "$@"
+# Build-time Python runs with the native x86 tooling interpreter. The target
+# python is aarch64 under qemu, and its multiprocessing primitives break there
+# (mojom_parser: "semaphore or lock released too many times";
+# generate_bindings.py: the pool blocks forever). html5lib/six/webencodings are
+# installed in the tooling for this.
+exec /srv/mer/toolings/$TOOLING/usr/bin/python3 "\$@"
 PYSB2
   chmod +x "$BT/install/bin/py-sb2.sh"
   # il wrapper si (ri)scrive se manca o e' di una versione senza ponte
@@ -220,7 +224,7 @@ fix_mksnapshot() {
 # x86 del tooling SDK (3.11 come quello del target), che sotto sb2 gira nativo.
 fix_pynativo() {
   local w=$BT/install/bin/py-nativo.sh f=$GNDIR/toolchain.ninja
-  printf '#!/bin/sh\n# python x86 del tooling SDK (nativo, niente qemu) per generate_bindings.py\nexec /srv/mer/toolings/SailfishOS-5.1.0.11/usr/bin/python3 "$@"\n' > "$w"
+  printf '#!/bin/sh\n# python x86 del tooling SDK (nativo, niente qemu) per generate_bindings.py\nexec /srv/mer/toolings/%s/usr/bin/python3 "$@"\n' "$TOOLING" > "$w"
   chmod +x "$w"
   sed -i '/generate_bindings\.py/s#install/bin/py-sb2\.sh #install/bin/py-nativo.sh #' "$f"
   echo "  + generate_bindings col python nativo: $(grep -c py-nativo.sh "$f") regole"
