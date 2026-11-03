@@ -317,6 +317,22 @@ print("  + controllo dipendenze ts_library disattivato")
 PY
 }
 
+# ── 7) cross_thread_copier_base.h: include mancante per RetainedRefWrapper ──
+# In build jumbo l'ordine degli include cambia e la definizione di
+# base::internal::RetainedRefWrapper (base/functional/bind_internal.h) non
+# arriva piu' per via transitiva: il file la usa ma non la include.
+fix_bindinclude() {
+  local f=$SRCT/src/3rdparty/chromium/third_party/blink/renderer/platform/wtf/cross_thread_copier_base.h
+  [ -f "$f" ] || die "cross_thread_copier_base.h non trovato: $f"
+  if grep -q 'base/functional/bind_internal.h' "$f"; then
+    echo "  = include gia' presente"
+    return 0
+  fi
+  sed -i '/#include "base\/files\/file_error_or.h"/a #include "base/functional/bind_internal.h"' "$f"
+  grep -q 'base/functional/bind_internal.h' "$f" || die "include non inserito"
+  echo "  + aggiunto base/functional/bind_internal.h"
+}
+
 case "${1:-all}" in
   gn)       echo "== args.gn (V8)";        fix_gn ;;
   ninja)    echo "== toolchain.ninja";     fix_rsp; echo "== build.ninja (link)"; fix_link ;;
@@ -331,6 +347,7 @@ case "${1:-all}" in
   pynativo) echo "== binding Blink col python nativo"; fix_pynativo ;;
   qmlcache) echo "== permessi qmlcachegen"; fix_qmlcache ;;
   tsdeps)   echo "== ts_library dependency check"; fix_tsdeps ;;
+  bindinclude) echo "== cross_thread_copier_base include"; fix_bindinclude ;;
   all)      echo "== args.gn (V8)";        fix_gn
             echo "== toolchain.ninja";     fix_rsp
             echo "== build.ninja (link)";  fix_link
