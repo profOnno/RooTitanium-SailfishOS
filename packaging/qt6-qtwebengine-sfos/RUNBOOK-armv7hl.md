@@ -13,6 +13,12 @@ dove mancano o rifiutano il codec si ripiega da solo sul software (verificato
 sotto qemu). ⚠️ Il percorso hardware NON è collaudato: serve un telefono a 32 bit
 vero (nel chroot sul POCO non c'è hybris a 32 bit).
 
+Camera capture (added 2026-11-03): `ARCH=armv7hl scripts/apply-droidcamera.sh`
+wires the same droidmedia layer for `getUserMedia`, independently of the
+decoder. Either can be enabled alone, and both fall back to the stock backend
+(V4L2 / software) when droidmedia is missing or too old. Like the decoder wiring,
+it must be re-run after every build-tree regeneration.
+
 ## Albero e target separati
 
 Niente di quello che serve all'aarch64 viene toccato:

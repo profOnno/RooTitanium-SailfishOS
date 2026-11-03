@@ -29,3 +29,17 @@ esistono in 140. Il sorgente del decoder va adattato a mano:
 `DecoderBuffer::data_size()` → `size()`, `VideoFrame::kYPlane/kUPlane/kVPlane`
 → `kY/kU/kV`, `VideoFrame::stride()` ora restituisce `size_t`.
 `VideoDecoder` (interfaccia) è identica a 122.
+
+Camera capture (`../scripts/apply-droidcamera.sh`, added 2026-11-03) follows the
+same approach as the decoder: it is not a numbered patch. The canonical sources
+live in `../droidcamera/`; the script copies them to
+`media/capture/video/droidmedia/`, adds them to `capture_lib` with the
+`droidmedia` pkg_config, and makes
+`CreatePlatformSpecificVideoCaptureDeviceFactory()` prefer the droidmedia factory
+when `DroidVideoCaptureDeviceFactory::IsSupported()` answers yes. Otherwise the
+tree stays on V4L2, unchanged. For 140 the anchors are
+`jumbo_component("capture_lib") {`, the `if (is_linux)` block containing
+`video/linux/v4l2_capture_delegate_gpu_helper.cc`, and the `IS_LINUX` branch in
+`create_video_capture_device_factory.cc`; all three were verified against
+140.0.7339.264.
+

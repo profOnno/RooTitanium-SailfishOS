@@ -2,7 +2,8 @@
 # Configure di QtWebEngine 6.140 (Chromium 140) sopra Qt 6.12 — task 2.5 #6.
 # Dalla workstation:  ARCH=aarch64|armv7hl ./configure-6.140.sh
 # Sorgenti: scratch/qtwebengine-6.140 (ramo 6.140.0, gia' patchato: patch SFOS
-# di Rinigus + patches-6.140/ + innesto droidmedia). Build fuori dai sorgenti,
+# di Rinigus + patches-6.140/ + innesto droidmedia; the camera capture is wired
+# separately by scripts/apply-droidcamera.sh). Build fuori dai sorgenti,
 # una cartella per arch, nel target sb2 clonato con Qt 6.12 (…-qt612).
 # NINJAFLAGS (default -j10) finisce in build.ninja e limita il ninja INTERNO di
 # Chromium: senza, usa nproc dell host +2 (=34) e satura i 31 GB (OOM 10 ott).
