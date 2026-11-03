@@ -13,7 +13,8 @@
 #   scripts/prepare-sources-6.140.sh --reset    # git checkout the tree first
 #
 # SRC overrides the source directory (default scratch/qtwebengine-6.140).
-# Idempotent: patches already applied are skipped.
+# A marker ($SRC/.rt-prepared) makes re-runs cheap; if a run is interrupted,
+# use --reset before starting over.
 set -euo pipefail
 
 REPO=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)
@@ -21,6 +22,7 @@ SRC=${SRC:-$REPO/scratch/qtwebengine-6.140}
 SFOS=$REPO/packaging/qt6-qtwebengine-sfos/patches-sfos
 OURS=$REPO/packaging/qt6-qtwebengine-sfos/patches-6.140
 CHROMIUM=$SRC/src/3rdparty/chromium
+MARKER=$SRC/.rt-prepared
 MODE=${1:-}
 
 die() { echo "ERROR: $*" >&2; exit 1; }
@@ -28,60 +30,65 @@ die() { echo "ERROR: $*" >&2; exit 1; }
 [ -d "$SRC" ] || die "source tree not found: $SRC"
 [ -d "$CHROMIUM" ] || die "Chromium submodule not initialised: $CHROMIUM"
 
+# Ordered list: "directory|patch". The hwcap2 patch lives inside the Chromium
+# submodule; the others apply at the QtWebEngine root.
+PATCHES=(
+    "$SRC|$SFOS/qtwebengine-SIOCGSTAMP.patch"
+    "$SRC|$SFOS/qtwebengine-link-pipewire.patch"
+    "$SRC|$SFOS/qtwebengine-aarch64-new-stat.patch"
+    "$SRC|$SFOS/qtwebengine-fix-build.patch"
+    "$CHROMIUM|$SFOS/qtwebengine-aarch64-hwcap2-bti.patch"
+    "$SRC|$SFOS/qtwebengine-sfos-egl-validating-command-decoder.patch"
+    "$SRC|$SFOS/qtwebengine-sfos-shared-gl-texture-compositor.patch"
+)
+# RooTitanium patches. 0307 is retired on 6.140.0: upstream already creates the
+# texture from the EGLImage (see patches-6.140/README.md).
+for p in "$OURS"/03[0-9][0-9]-*.patch; do
+    [ -e "$p" ] || continue
+    case "$(basename "$p")" in
+        0307-*) continue ;;
+    esac
+    PATCHES+=("$SRC|$p")
+done
+
 if [ "$MODE" = "--reset" ]; then
     echo "→ resetting the source tree"
     git -C "$SRC" checkout -- .
     git -C "$CHROMIUM" checkout -- .
+    rm -f "$MARKER"
 fi
 
-# ---------------------------------------------------------------------------
-apply() {  # apply <dir> <patch> [extra patch args...]
-    local dir=$1 file=$2
-    shift 2
-    local name
-    name=$(basename "$file")
-    if [ "$MODE" = "--check" ]; then
-        if patch -d "$dir" -p1 --dry-run --batch "$@" < "$file" >/dev/null 2>&1; then
-            echo "✓ applies: $name"
-        elif patch -d "$dir" -p1 --dry-run --reverse --batch "$@" < "$file" >/dev/null 2>&1; then
-            echo "= already applied: $name"
-        else
-            echo "✗ DOES NOT APPLY: $name"
-            return 1
-        fi
-        return 0
-    fi
-    if patch -d "$dir" -p1 --dry-run --reverse --batch "$@" < "$file" >/dev/null 2>&1; then
-        echo "= already applied: $name"
-        return 0
-    fi
-    echo "→ $name"
-    patch -d "$dir" -p1 --forward --batch --no-backup-if-mismatch "$@" < "$file"
-}
-
-# SFOS / Rinigus patches, in the order used by the chum spec. The GL-includes
-# patch is deliberately not applied (not needed on 6.140); the openh264 and
-# system-ffmpeg patches are not used because the build bundles ffmpeg.
-apply "$SRC"      "$SFOS/qtwebengine-SIOCGSTAMP.patch"
-apply "$SRC"      "$SFOS/qtwebengine-link-pipewire.patch"
-apply "$SRC"      "$SFOS/qtwebengine-aarch64-new-stat.patch"
-apply "$SRC"      "$SFOS/qtwebengine-fix-build.patch"
-# This one operates on the Chromium subtree.
-apply "$CHROMIUM" "$SFOS/qtwebengine-aarch64-hwcap2-bti.patch"
-apply "$SRC"      "$SFOS/qtwebengine-sfos-egl-validating-command-decoder.patch"
-apply "$SRC"      "$SFOS/qtwebengine-sfos-shared-gl-texture-compositor.patch"
-
-# RooTitanium patches (0300..0311; the missing numbers are patches retired on
-# 6.140, see patches-6.140/README.md).
-for p in "$OURS"/03[0-9][0-9]-*.patch; do
-    [ -e "$p" ] || continue
-    apply "$SRC" "$p"
-done
-
 if [ "$MODE" = "--check" ]; then
+    rc=0
+    for entry in "${PATCHES[@]}"; do
+        dir=${entry%%|*}
+        file=${entry#*|}
+        name=$(basename "$file")
+        if patch -d "$dir" -p1 --dry-run --batch < "$file" >/dev/null 2>&1; then
+            echo "✓ applies: $name"
+        else
+            echo "✗ does not apply (yet): $name"
+            rc=1
+        fi
+    done
     echo
-    echo "dry-run only; re-run without --check to apply"
-    exit 0
+    echo "note: 0310/0311 depend on 0309, so a per-patch dry-run on an unpatched"
+    echo "      tree reports them as failing; they apply fine in order."
+    exit $rc
+fi
+
+if [ -f "$MARKER" ]; then
+    echo "= patches already applied (marker: $MARKER)"
+    echo "  use --reset to start from a clean tree"
+else
+    for entry in "${PATCHES[@]}"; do
+        dir=${entry%%|*}
+        file=${entry#*|}
+        echo "→ $(basename "$file")"
+        patch -d "$dir" -p1 --forward --batch --no-backup-if-mismatch < "$file" \
+            || die "patch failed: $(basename "$file") (run --reset to retry)"
+    done
+    printf '%s\n' "${PATCHES[@]}" > "$MARKER"
 fi
 
 # droidmedia decoder and camera insertions (scripts are idempotent).
