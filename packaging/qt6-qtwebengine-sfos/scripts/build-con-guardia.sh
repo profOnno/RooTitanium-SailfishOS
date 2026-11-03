@@ -113,7 +113,8 @@ fissa_ninja_interno() {
     nota "build.ninja: rigenerazione se serve, poi controllo del -j del ninja interno"
     sdk_run "cd $BUILDDIR && sb2 -t $TARGET -R cmake --build . --target build.ninja" \
         >>"$GUARDLOG" 2>&1 || { nota "ERRORE: rigenerazione di build.ninja fallita"; return 1; }
-    sed -i -E "s#(/usr/bin/ninja) -C #\1 -j$NINJA_INTERNO_J -C #g" "$f"
+    # 6.140 writes "ninja -j10 -C"; older trees wrote "ninja -C". Normalize both.
+    sed -i -E "s#(/usr/bin/ninja)( -j[0-9]+)? -C #\1 -j$NINJA_INTERNO_J -C #g" "$f"
     senza=$(grep -cE '/usr/bin/ninja -C ' "$f")
     con=$(grep -c "/usr/bin/ninja -j$NINJA_INTERNO_J -C " "$f")
     if [ "$senza" -ne 0 ]; then
