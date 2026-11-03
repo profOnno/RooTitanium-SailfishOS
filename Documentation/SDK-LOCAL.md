@@ -38,6 +38,22 @@ workspace is also bind-mounted **inside** the chroot at the same path
 scripts can pass host paths unchanged instead of translating them to
 `/parentroot/...`.
 
+The hook also bind-mounts **the repository only** into every target
+(`<target>/mnt/ai_workspace/RooTitanium`), because `sb2` chroots into the
+target. Binding all of `/mnt/ai_workspace` there would recurse: the relocated
+SDK targets live under it.
+
+## Writes from sb2: use `-R`
+
+scratchbox2 marks host paths as `readonly-if-not-root`: a normal
+`sb2 -t <target> cmake ...` gets **EROFS** as soon as it writes outside the
+target root or the home directory. Build commands must therefore use
+`sb2 -t <target> -R cmake ...` (simulated root). Files stay owned by the SDK
+user (`sailfish`), so this does not litter root-owned build artifacts.
+
+This is why `build-module.sh`, `configure-6.140.sh` and `build-con-guardia.sh`
+pass `-R` to `sb2`.
+
 ## Running commands
 
 ```sh

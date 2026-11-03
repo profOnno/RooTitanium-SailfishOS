@@ -1,0 +1,125 @@
+diff --git a/src/3rdparty/chromium/base/debug/profiler.h b/src/3rdparty/chromium/base/debug/profiler.h
+index 035affc7c..d8e1a5346 100644
+--- a/src/3rdparty/chromium/base/debug/profiler.h
++++ b/src/3rdparty/chromium/base/debug/profiler.h
+@@ -5,6 +5,7 @@
+ #ifndef BASE_DEBUG_PROFILER_H_
+ #define BASE_DEBUG_PROFILER_H_
+ 
++#include <cstdint>
+ #include <stddef.h>
+ #include <stdint.h>
+ 
+diff --git a/src/3rdparty/chromium/cc/trees/target_property.cc b/src/3rdparty/chromium/cc/trees/target_property.cc
+index 7d73467a9..be4febd9a 100644
+--- a/src/3rdparty/chromium/cc/trees/target_property.cc
++++ b/src/3rdparty/chromium/cc/trees/target_property.cc
+@@ -8,6 +8,8 @@
+ 
+ #include "ui/gfx/animation/keyframe/target_property.h"
+ 
++#include <cstdint>
++
+ namespace cc {
+ 
+ static_assert(TargetProperty::LAST_TARGET_PROPERTY <
+diff --git a/src/3rdparty/chromium/device/base/synchronization/one_writer_seqlock.cc b/src/3rdparty/chromium/device/base/synchronization/one_writer_seqlock.cc
+index c62a00ee0..af54520b7 100644
+--- a/src/3rdparty/chromium/device/base/synchronization/one_writer_seqlock.cc
++++ b/src/3rdparty/chromium/device/base/synchronization/one_writer_seqlock.cc
+@@ -6,6 +6,8 @@
+ 
+ #include "base/threading/platform_thread.h"
+ 
++#include <cstdint>
++
+ namespace device {
+ 
+ OneWriterSeqLock::OneWriterSeqLock() : sequence_(0) {}
+diff --git a/src/3rdparty/chromium/extensions/common/constants.h b/src/3rdparty/chromium/extensions/common/constants.h
+index adbcfa540..5923bd2fe 100644
+--- a/src/3rdparty/chromium/extensions/common/constants.h
++++ b/src/3rdparty/chromium/extensions/common/constants.h
+@@ -15,6 +15,8 @@
+ #include "build/chromeos_buildflags.h"
+ #include "extensions/common/extensions_export.h"
+ 
++#include <cstdint>
++
+ namespace extensions {
+ 
+ // Scheme we serve extension content from.
+diff --git a/src/3rdparty/chromium/gpu/config/gpu_util.h b/src/3rdparty/chromium/gpu/config/gpu_util.h
+index 7afe87a1d..6b79c7fda 100644
+--- a/src/3rdparty/chromium/gpu/config/gpu_util.h
++++ b/src/3rdparty/chromium/gpu/config/gpu_util.h
+@@ -5,6 +5,8 @@
+ #ifndef GPU_CONFIG_GPU_UTIL_H_
+ #define GPU_CONFIG_GPU_UTIL_H_
+ 
++#include <cstdint>
++
+ #include "build/build_config.h"
+ #include "gpu/config/gpu_config_export.h"
+ #include "gpu/config/gpu_feature_info.h"
+diff --git a/src/3rdparty/chromium/third_party/dawn/src/dawn/native/CacheKey.h b/src/3rdparty/chromium/third_party/dawn/src/dawn/native/CacheKey.h
+index 828aa9cb2..a0117b3b3 100644
+--- a/src/3rdparty/chromium/third_party/dawn/src/dawn/native/CacheKey.h
++++ b/src/3rdparty/chromium/third_party/dawn/src/dawn/native/CacheKey.h
+@@ -28,6 +28,7 @@
+ #ifndef SRC_DAWN_NATIVE_CACHEKEY_H_
+ #define SRC_DAWN_NATIVE_CACHEKEY_H_
+ 
++#include <cstdint>
+ #include <utility>
+ 
+ #include "dawn/native/stream/ByteVectorSink.h"
+diff --git a/src/3rdparty/chromium/ui/events/gesture_event_details.h b/src/3rdparty/chromium/ui/events/gesture_event_details.h
+index 0a82a1163..9b08f04e0 100644
+--- a/src/3rdparty/chromium/ui/events/gesture_event_details.h
++++ b/src/3rdparty/chromium/ui/events/gesture_event_details.h
+@@ -10,6 +10,7 @@
+ #ifndef UI_EVENTS_GESTURE_EVENT_DETAILS_H_
+ #define UI_EVENTS_GESTURE_EVENT_DETAILS_H_
+ 
++#include <cstdint>
+ #include <string.h>
+ 
+ #include "base/check_op.h"
+diff --git a/src/3rdparty/chromium/ui/gfx/geometry/linear_gradient.h b/src/3rdparty/chromium/ui/gfx/geometry/linear_gradient.h
+index d32766283..18b8a85e1 100644
+--- a/src/3rdparty/chromium/ui/gfx/geometry/linear_gradient.h
++++ b/src/3rdparty/chromium/ui/gfx/geometry/linear_gradient.h
+@@ -7,6 +7,7 @@
+ 
+ #include <stdint.h>
+ 
++#include <cstdint>
+ #include <array>
+ #include <cstddef>
+ #include <cstdint>
+diff --git a/src/3rdparty/chromium/v8/src/base/macros.h b/src/3rdparty/chromium/v8/src/base/macros.h
+index f81258363..ec7d67550 100644
+--- a/src/3rdparty/chromium/v8/src/base/macros.h
++++ b/src/3rdparty/chromium/v8/src/base/macros.h
+@@ -5,6 +5,7 @@
+ #ifndef V8_BASE_MACROS_H_
+ #define V8_BASE_MACROS_H_
+ 
++#include <cstdint>
+ #include <limits>
+ #include <type_traits>
+ 
+diff --git a/src/core/browsing_data_remover_delegate_qt.h b/src/core/browsing_data_remover_delegate_qt.h
+index 21288c604..cbd9e43ce 100644
+--- a/src/core/browsing_data_remover_delegate_qt.h
++++ b/src/core/browsing_data_remover_delegate_qt.h
+@@ -9,6 +9,8 @@
+ 
+ #include "content/public/browser/browsing_data_remover_delegate.h"
+ 
++#include <cstdint>
++
+ namespace QtWebEngineCore {
+ 
+ class BrowsingDataRemoverDelegateQt : public content::BrowsingDataRemoverDelegate {

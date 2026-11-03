@@ -1,0 +1,32 @@
+diff --git a/src/3rdparty/chromium/ui/gl/features.gni b/src/3rdparty/chromium/ui/gl/features.gni
+index 56dafcf47..376c58312 100644
+--- a/src/3rdparty/chromium/ui/gl/features.gni
++++ b/src/3rdparty/chromium/ui/gl/features.gni
+@@ -20,8 +20,10 @@ declare_args() {
+   build_dawn_tests = is_mac || is_win || is_linux || is_chromeos || is_android
+ 
+   # desktop android devices exclusively use angle and thus should not use
+-  # the validating command decoder
+-  enable_validating_command_decoder = is_android && !is_desktop_android
++  # the validating command decoder. Sailfish uses a Linux/Ozone Qt build on top
++  # of Android/libhybris EGL drivers, where passthrough command decoder can
++  # expose driver crashes with WebGL.
++  enable_validating_command_decoder = is_linux || (is_android && !is_desktop_android)
+ }
+ 
+ declare_args() {
+diff --git a/src/core/web_engine_context.cpp b/src/core/web_engine_context.cpp
+index 1f0724601..f3ccb7540 100644
+--- a/src/core/web_engine_context.cpp
++++ b/src/core/web_engine_context.cpp
+@@ -179,5 +179,10 @@ static std::string getGLType(const base::CommandLine &cmd)
+     if (!usingSupportedSGBackend() || cmd.HasSwitch(switches::kDisableGpu))
+         return gl::kGLImplementationDisabledName;
+ 
++#if defined(Q_OS_LINUX) && BUILDFLAG(IS_OZONE)
++    // Sailfish/libhybris exposes Android EGL directly; ANGLE's native pixmap path requires dma-buf import.
++    return gl::kGLImplementationEGLName;
++#endif
++
+     return gl::kGLImplementationANGLEName;
+ }

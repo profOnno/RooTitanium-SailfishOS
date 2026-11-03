@@ -1,0 +1,110 @@
+diff --git a/src/core/compositor/native_skia_output_device.cpp b/src/core/compositor/native_skia_output_device.cpp
+index 4f56f9c02..c09200fab 100644
+--- a/src/core/compositor/native_skia_output_device.cpp
++++ b/src/core/compositor/native_skia_output_device.cpp
+@@ -253,7 +253,8 @@ bool NativeSkiaOutputDevice::Buffer::initialize()
+ 
+     gpu::SharedImageUsageSet sharedImageUsage =
+             gpu::SHARED_IMAGE_USAGE_DISPLAY_READ
+-          | gpu::SHARED_IMAGE_USAGE_DISPLAY_WRITE;
++          | gpu::SHARED_IMAGE_USAGE_DISPLAY_WRITE
++          | gpu::SHARED_IMAGE_USAGE_GLES2_WRITE;
+     if (m_parent->m_contextState->gr_context_type() == gpu::GrContextType::kGL)
+         sharedImageUsage |= gpu::SHARED_IMAGE_USAGE_GLES2_READ;
+     if (m_parent->m_isNativeBufferSupported)
+diff --git a/src/core/compositor/native_skia_output_device_opengl.cpp b/src/core/compositor/native_skia_output_device_opengl.cpp
+index 226aaab0f..15e1f2ea2 100644
+--- a/src/core/compositor/native_skia_output_device_opengl.cpp
++++ b/src/core/compositor/native_skia_output_device_opengl.cpp
+@@ -148,18 +148,14 @@ QSGTexture *NativeSkiaOutputDeviceOpenGL::texture(QQuickWindow *win, uint32_t te
+     scoped_refptr<gfx::NativePixmap> nativePixmap = m_frontBuffer->nativePixmap();
+ #if BUILDFLAG(ENABLE_VULKAN)
+     GrVkImageInfo vkImageInfo;
++#endif
++    GrBackendTexture backendTexture;
+     if (!nativePixmap) {
+         if (m_isNativeBufferSupported) {
+             qWarning("Failed to get native pixmap despite dma_buf support.");
+             return nullptr;
+         }
+ 
+-        if (m_contextState->gr_context_type() != gpu::GrContextType::kVulkan) {
+-            // Unable to fall back to Vulkan; aborting.
+-            qWarning("Failed to get native pixmap due to dma_buf acquisition failure.");
+-            return nullptr;
+-        }
+-
+         sk_sp<SkImage> skImage = m_frontBuffer->skImage();
+         if (!skImage) {
+             qWarning("No SkImage.");
+@@ -171,30 +167,30 @@ QSGTexture *NativeSkiaOutputDeviceOpenGL::texture(QQuickWindow *win, uint32_t te
+             return nullptr;
+         }
+ 
+-        GrBackendTexture backendTexture;
+         bool success = SkImages::GetBackendTextureFromImage(skImage, &backendTexture, false);
+         if (!success || !backendTexture.isValid()) {
+             qWarning("Failed to retrieve backend texture from SkImage.");
+             return nullptr;
+         }
+ 
+-        if (backendTexture.backend() != GrBackendApi::kVulkan) {
+-            qWarning("Backend texture is not a Vulkan texture.");
+-            return nullptr;
++#if BUILDFLAG(ENABLE_VULKAN)
++        if (backendTexture.backend() == GrBackendApi::kVulkan) {
++            GrBackendTextures::GetVkImageInfo(backendTexture, &vkImageInfo);
++            if (vkImageInfo.fAlloc.fMemory == VK_NULL_HANDLE) {
++                qWarning("Unable to access Vulkan memory.");
++                return nullptr;
++            }
+         }
+-
+-        GrBackendTextures::GetVkImageInfo(backendTexture, &vkImageInfo);
+-        if (vkImageInfo.fAlloc.fMemory == VK_NULL_HANDLE) {
+-            qWarning("Unable to access Vulkan memory.");
++#endif
++        if (backendTexture.backend() != GrBackendApi::kOpenGL
++#if BUILDFLAG(ENABLE_VULKAN)
++            && backendTexture.backend() != GrBackendApi::kVulkan
++#endif
++        ) {
++            qWarning("Backend texture is not an OpenGL texture.");
+             return nullptr;
+         }
+     }
+-#else
+-    if (!nativePixmap) {
+-        qWarning("No native pixmap.");
+-        return nullptr;
+-    }
+-#endif // BUILDFLAG(ENABLE_VULKAN)
+ #elif defined(Q_OS_WIN)
+     auto overlayImage = m_frontBuffer->overlayImage();
+     if (!overlayImage) {
+@@ -343,6 +339,17 @@ QSGTexture *NativeSkiaOutputDeviceOpenGL::texture(QQuickWindow *win, uint32_t te
+         }
+ #endif // QT_CONFIG(egl)
+     } else {
++        if (backendTexture.backend() == GrBackendApi::kOpenGL) {
++            qCDebug(lcWebEngineCompositor, "OPENGL: Importing shared GL Texture.");
++
++            GrGLTextureInfo glTextureInfo;
++            if (!GrBackendTextures::GetGLTextureInfo(backendTexture, &glTextureInfo)) {
++                qWarning("Failed to retrieve OpenGL texture info from SkImage.");
++                return nullptr;
++            }
++
++            glTexture = glTextureInfo.fID;
++        } else {
+ #if BUILDFLAG(ENABLE_VULKAN)
+         qCDebug(lcWebEngineCompositor, "VULKAN: Importing VkImage into GL Texture.");
+         Q_ASSERT(m_contextState->gr_context_type() == gpu::GrContextType::kVulkan);
+@@ -400,6 +407,7 @@ QSGTexture *NativeSkiaOutputDeviceOpenGL::texture(QQuickWindow *win, uint32_t te
+ #else
+         Q_UNREACHABLE();
+ #endif // BUILDFLAG(ENABLE_VULKAN)
++        }
+     }
+ 
+     texture = QNativeInterface::QSGOpenGLTexture::fromNative(glTexture, win, size(), texOpts);

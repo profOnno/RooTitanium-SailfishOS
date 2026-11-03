@@ -26,7 +26,7 @@ BLD=$REPO/scratch/qt612/build-$ARCH/qtwebengine
 mkdir -p "$BLD"
 FL="-O2 -pipe -Wp,-D_FORTIFY_SOURCE=2 -fexceptions -fstack-protector --param=ssp-buffer-size=4 $MARCH"
 sdk_run "cd $BLD && NINJAFLAGS='${NINJAFLAGS:--j10}' CFLAGS='$FL' CXXFLAGS='$FL' \
- sb2 -t $T cmake --fresh -S $SRC -B $BLD -GNinja \
+ sb2 -t $T -R cmake --fresh -S $SRC -B $BLD -GNinja \
   -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr -DBUILD_SHARED_LIBS=ON \
   -DCMAKE_TOOLCHAIN_FILE=/usr/$L/cmake/Qt6/qt.toolchain.cmake \
   -DINSTALL_ARCHDATADIR=/usr/$L/qt6 -DINSTALL_BINDIR=/usr/$L/qt6/bin -DINSTALL_LIBDIR=/usr/$L \

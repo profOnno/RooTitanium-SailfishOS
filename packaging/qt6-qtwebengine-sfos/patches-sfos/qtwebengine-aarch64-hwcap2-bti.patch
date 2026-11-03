@@ -1,0 +1,19 @@
+diff --git a/base/allocator/partition_allocator/src/partition_alloc/aarch64_support.h b/base/allocator/partition_allocator/src/partition_alloc/aarch64_support.h
+index 1111111111..2222222222 100644
+--- a/base/allocator/partition_allocator/src/partition_alloc/aarch64_support.h
++++ b/base/allocator/partition_allocator/src/partition_alloc/aarch64_support.h
+@@ -22,6 +22,14 @@
+ #if PA_BUILDFLAG(PA_ARCH_CPU_ARM64) && defined(HAS_HW_CAPS)
+ #include <asm/hwcap.h>
+ #include <sys/ifunc.h>
++
++// Temporary definitions until new enough kernel headers are available.
++#ifndef HWCAP2_BTI
++#define HWCAP2_BTI (1 << 17)
++#endif
++#ifndef HWCAP2_MTE
++#define HWCAP2_MTE (1 << 18)
++#endif
+ #else
+ struct __ifunc_arg_t;
+ #endif

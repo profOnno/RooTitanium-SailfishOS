@@ -111,7 +111,7 @@ NINJA_INTERNO_J=${NINJA_INTERNO_J:-10}
 fissa_ninja_interno() {
     local f=$BUILDDIR/build.ninja senza con
     nota "build.ninja: rigenerazione se serve, poi controllo del -j del ninja interno"
-    sdk_run "cd $BUILDDIR && sb2 -t $TARGET cmake --build . --target build.ninja" \
+    sdk_run "cd $BUILDDIR && sb2 -t $TARGET -R cmake --build . --target build.ninja" \
         >>"$GUARDLOG" 2>&1 || { nota "ERRORE: rigenerazione di build.ninja fallita"; return 1; }
     sed -i -E "s#(/usr/bin/ninja) -C #\1 -j$NINJA_INTERNO_J -C #g" "$f"
     senza=$(grep -cE '/usr/bin/ninja -C ' "$f")
@@ -136,7 +136,7 @@ nota "=== Avvio build $ARCH -j${J} via sb2 (cross-gcc NATIVO) con guardia VRM (r
 # emulati (leggeri); i compile vanno nativi. Eseguito come utente SDK (owner dei
 # target sb2). J = concorrenza allineata ai core concessi (RAM piu sicura coi
 # compile nativi che possono usare fino a ~4 GB ciascuno).
-sdk_run "cd $BUILDDIR && sb2 -t $TARGET cmake --build . -j$J --verbose ${TARGETS_OVR:+--target $TARGETS_OVR}" \
+sdk_run "cd $BUILDDIR && sb2 -t $TARGET -R cmake --build . -j$J --verbose ${TARGETS_OVR:+--target $TARGETS_OVR}" \
     >"$BUILDLOG" 2>&1 &
 BUILD_PID=$!
 
