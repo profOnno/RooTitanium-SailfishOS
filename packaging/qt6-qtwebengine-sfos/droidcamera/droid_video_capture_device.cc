@@ -136,7 +136,7 @@ std::string ChoosePreviewFormat(const std::string& values) {
                         base::SPLIT_WANT_NONEMPTY);
   for (const char* preferred : {"yuv420p", "nv12", "yuv420sp"}) {
     for (const std::string& format : formats) {
-      if (base::EqualsCaseInsensitive(format, preferred)) {
+      if (base::EqualsCaseInsensitiveASCII(format, preferred)) {
         return preferred;
       }
     }

@@ -41,7 +41,7 @@ constexpr char kDeviceIdPrefix[] = "droidmedia:";
 // about a dozen, and enumeration (which opens the camera) would get slow.
 constexpr size_t kMaxFormats = 12;
 
-bool ParseSize(const std::string& text, int* width, int* height) {
+bool ParsePreviewSize(const std::string& text, int* width, int* height) {
   return sscanf(text.c_str(), "%dx%d", width, height) == 2 && *width > 0 &&
          *height > 0;
 }
@@ -76,7 +76,8 @@ VideoCaptureFormats QueryPreviewFormats(int camera_index) {
                          base::SPLIT_WANT_NONEMPTY)) {
     int width = 0;
     int height = 0;
-    if (!ParseSize(token, &width, &height) || width > 1920 || height > 1080) {
+    if (!ParsePreviewSize(token, &width, &height) || width > 1920 ||
+        height > 1080) {
       continue;
     }
     formats.emplace_back(gfx::Size(width, height), 30.0f, PIXEL_FORMAT_I420);
