@@ -54,6 +54,27 @@ You can also copy `index.html` to any HTTPS host you already have. Then use
 **Download JSON** instead of **Send to server** (the page has no other network
 access).
 
+### If the phone shows `ERR_CERT_AUTHORITY_INVALID`
+
+QtWebEngine rejects the self-signed certificate, so the page never loads. From
+RPM **2.9.2-3** there is a development marker that appends
+`--ignore-certificate-errors` to Chromium:
+
+```sh
+touch /home/rootitanium/ALLOW_BAD_CERT   # then restart RooTitanium
+# ... run the test ...
+rm /home/rootitanium/ALLOW_BAD_CERT      # do not leave it: it disables TLS
+                                         # validation for ALL sites
+```
+
+The marker only makes the browser ignore the warning; it does not install the
+certificate. If you prefer not to weaken the browser, use a certificate the
+phone already trusts (e.g. a Cloudflare Tunnel URL) or host `index.html` on an
+existing HTTPS site and send the downloaded JSON.
+
+The `tools/camera-test` server certificate is self-signed and generated on the
+machine that runs it; its public key is not in the phone's trust store.
+
 ## What to run
 
 1. **Run full test** — permission, each camera, 2 switch cycles both ways,

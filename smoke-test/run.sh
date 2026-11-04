@@ -80,6 +80,10 @@ export QTWEBENGINE_DISABLE_SANDBOX=1
 # click, tap fermo = ok). Android usa 8dp ≈ 21px fisici; 28px ≈ 2,6mm. Migliora
 # anche longpress (stesso slop) e pinch (span_slop = 2x questo valore).
 export QTWEBENGINE_CHROMIUM_FLAGS="${QTWEBENGINE_CHROMIUM_FLAGS:---no-sandbox --disable-gpu-sandbox --use-gl=egl --disable-seccomp-filter-sandbox --enable-logging=stderr --log-level=0 --touch-events=enabled --blink-settings=availablePointerTypes=2,availableHoverTypes=1,primaryPointerType=2,primaryHoverType=1 --force-device-scale-factor=2.6214 --touch-slop-distance=28 --enable-viewport --disable-features=WebBluetooth,WebUSB,WebNFC,IdleDetection,FedCm,WebOTP --force-webrtc-ip-handling-policy=default_public_interface_only --enable-features=BlockInsecurePrivateNetworkRequests}"
+# Test con server HTTPS self-signed (tools/camera-test): come il launcher RPM,
+# il marker accetta i certificati non validi. Solo sviluppo.
+[ -e "$HERE/ALLOW_BAD_CERT" ] && \
+  export QTWEBENGINE_CHROMIUM_FLAGS="$QTWEBENGINE_CHROMIUM_FLAGS --ignore-certificate-errors"
 
 # log utile per diagnosi
 export QT_LOGGING_RULES="qt.webengine*=true;qt.qpa*=true"

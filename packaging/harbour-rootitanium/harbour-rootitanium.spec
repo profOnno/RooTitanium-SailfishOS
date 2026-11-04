@@ -18,7 +18,7 @@
 
 Name:       harbour-rootitanium
 Version:    2.9.3
-Release:    1
+Release:    2
 Summary:    RooTitanium — browser Qt6 WebEngine per SailfishOS
 License:    GPLv3+ and LGPLv3 and BSD
 # Codice app (GPL-3.0-or-later) + Qt6/QtWebEngine bundled (LGPLv3) + Chromium (BSD).
@@ -138,6 +138,11 @@ install -m0644 %{stagingdir}/NOTICE.md %{buildroot}%{_defaultlicensedir}/%{name}
 %{_datadir}/icons/hicolor/*/apps/harbour-rootitanium.png
 
 %changelog
+* Thu Nov 05 2026 RootGPT <emagiampa@gmail.com> - 2.9.3-2
+- Camera getUserMedia via droidmedia (QtWebEngine 6.140): back/front cameras,
+  switching, adaptive vendor formats, teardown errors ignored; microphone and
+  audio+video verified on the Xperia 10 V. Dettagli nelle voci 2.9.2-3..6.
+
 * Wed Nov 04 2026 RootGPT <emagiampa@gmail.com> - 2.9.3-1
 - Revoking a site's permission now removes its push subscription from
   Foghorn right away, even with the push switch off.
@@ -147,6 +152,36 @@ install -m0644 %{stagingdir}/NOTICE.md %{buildroot}%{_defaultlicensedir}/%{name}
 - New subscriptions show the site name in Foghorn.
 - The push switch and the help page explain what switching off does and
   how to stop one site or all of them.
+
+* Thu Nov 05 2026 RootGPT <emagiampa@gmail.com> - 2.9.2-6
+- Camera: formati adattivi senza aprire la camera durante l'enumerazione.
+  Dopo la prima apertura ConfigureCamera() salva i preview-size-values del
+  vendor; GetDevicesInfo() li pubblica (prima usa 640x480/1280x720 come
+  fallback). Nessuna eviction e capacità reali anche su altri telefoni.
+
+* Thu Nov 05 2026 RootGPT <emagiampa@gmail.com> - 2.9.2-5
+- Camera: GetDevicesInfo non apre più la camera per leggere le risoluzioni.
+  enumerateDevices (Jitsi/Meet lo chiamano durante la chiamata) apriva e
+  chiudeva la HAL, faceva evict della sessione attiva
+  (CAMERA_ERROR_EVICTED, 0 frame) e il passaggio alla fotocamera posteriore
+  falliva.
+- Camera: StopAndDeAllocate azzera running_ sotto il lock della Ponte, così un
+  errore del vendor durante la chiusura non arriva più a Chromium come errore
+  fatale della sessione successiva.
+
+* Wed Nov 04 2026 RootGPT <emagiampa@gmail.com> - 2.9.2-4
+- Camera: il vendor manda CAMERA_ERROR_EVICTED (2) mentre la sessione viene
+  chiusa. Non è un errore di cattura e non deve più arrivare a Chromium:
+  prima un cambio camera poteva essere interpretato come errore fatale
+  (preview nero/fermo finché la track non ripartiva).
+- Launcher: con il marker DEBUG aggiunge --enable-logging=stderr --log-level=0,
+  così nel log ci sono anche requested/preview/first frame/stopped.
+
+* Wed Nov 04 2026 RootGPT <emagiampa@gmail.com> - 2.9.2-3
+- Launcher: il marker /home/rootitanium/ALLOW_BAD_CERT aggiunge
+  --ignore-certificate-errors ai flag Chromium. Serve al server HTTPS
+  self-signed di tools/camera-test (ERR_CERT_AUTHORITY_INVALID); vale per
+  tutti i siti finché il file esiste, poi si rimuove.
 
 * Sun Nov 01 2026 RootGPT <emagiampa@gmail.com> - 2.9.2-2
 - La pagina Informazioni mostra la versione giusta (2.9.2; la 2.9.2-1

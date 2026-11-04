@@ -15,6 +15,11 @@ build di `qt6-qtwebengine-sfos/`) in un RPM installabile via Storeman/pkcon.
   (le servono `/home/rootitanium`, le lib hybris di sistema e Chromium `--no-sandbox`).
 - **`/usr/share/icons/hicolor/{86,108,128,172,256}/apps/harbour-rootitanium.png`**.
 
+Marker di sviluppo: `/home/rootitanium/ALLOW_BAD_CERT` fa aggiungere al launcher
+`--ignore-certificate-errors` ai flag Chromium (serve al server HTTPS
+self-signed di `tools/camera-test`). Vale per tutti i siti finché il file
+esiste: si crea per il test e si rimuove subito dopo.
+
 ## Perché queste scelte (SFOS sailjail)
 Lipstick lancia le app via `invoker --type=<T> -- sailjail -p <profile> -- <bin>`.
 sailjail: (1) accetta solo ELF, (2) solo da `/usr/bin`, (3) sandboxa sempre in

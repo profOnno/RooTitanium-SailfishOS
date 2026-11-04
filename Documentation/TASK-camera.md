@@ -123,6 +123,10 @@ seconda apertura mentre la prima è viva, riaperture ravvicinate. Il report JSON
 e le JPEG arrivano in `reports/`. Per il log nativo serve il file
 `/home/rootitanium/DEBUG` (non una variabile): il launcher scrive
 `/tmp/rootitanium.log`, da filtrare con `grep -i 'droidmedia camera'`.
+Il server di test è HTTPS self-signed: se RooTitanium mostra
+`ERR_CERT_AUTHORITY_INVALID`, dall'RPM 2.9.2-3 basta il marker
+`/home/rootitanium/ALLOW_BAD_CERT` (si crea prima del test e si rimuove subito
+dopo; disabilita la verifica TLS per tutti i siti).
 
 Test page (local file, no network):
 

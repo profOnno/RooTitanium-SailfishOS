@@ -179,6 +179,25 @@ int main(int argc, char **argv) {
            /* una pagina pubblica non puo' sondare la rete locale */
            "--enable-features=BlockInsecurePrivateNetworkRequests", 0);
 
+    /* Test del server HTTPS self-signed di tools/camera-test: il marker
+     * /home/rootitanium/ALLOW_BAD_CERT aggiunge --ignore-certificate-errors
+     * ai flag. Serve solo in sviluppo (ERR_CERT_AUTHORITY_INVALID sulla LAN);
+     * vale per TUTTI i siti finche' il file esiste, quindi si toglie subito
+     * dopo il test con `rm /home/rootitanium/ALLOW_BAD_CERT`. */
+    if (access("/home/rootitanium/ALLOW_BAD_CERT", F_OK) == 0) {
+        const char *cur = getenv("QTWEBENGINE_CHROMIUM_FLAGS");
+        if (cur && !strstr(cur, "--ignore-certificate-errors")) {
+            char buf[8192];
+            int n = snprintf(buf, sizeof(buf),
+                             "%s --ignore-certificate-errors", cur);
+            if (n > 0 && (size_t)n < sizeof(buf))
+                setenv("QTWEBENGINE_CHROMIUM_FLAGS", buf, 1);
+        }
+        if (access("/home/rootitanium/DEBUG", F_OK) == 0)
+            fprintf(stderr, "[rt] launcher: ALLOW_BAD_CERT attivo "
+                            "(--ignore-certificate-errors)\n");
+    }
+
     /* execv del binario webengine-smoke, ma con argv[0] FORGIATO =
      * /usr/bin/harbour-rootitanium, cioe' il PERCORSO COMPLETO del binario
      * della riga Exec del .desktop. Lipstick riconosce la finestra di un'app
