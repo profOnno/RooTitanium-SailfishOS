@@ -91,6 +91,23 @@ machine that runs it; its public key is not in the phone's trust store.
 3. **Snapshot** at any moment if something looks wrong (stripes, wrong colours,
    frozen image).
 
+## Microphone
+
+Press **Test microphone** (speak while it runs). It:
+
+- lists `audioinput` devices before/after permission;
+- reports the track settings (`sampleRate`, `channelCount`,
+  `echoCancellation`, `noiseSuppression`, `autoGainControl`, `deviceId`);
+- measures 1.5 s of `AudioContext` RMS/peak in dBFS and the silent ratio;
+- records a 3 s clip, saved next to the report as `…-microphone.webm`;
+- then requests audio **and** video together (the Jitsi/Meet path) and checks
+  both tracks.
+
+RooTitanium must be allowed to use the microphone: answer the in-app permission
+dialog, and make sure **Settings › App Permissions › Microphone** is on. A
+`NotAllowedError` in the report means one of those is off (or the site decision
+was denied; reset it under Site Permissions).
+
 At the end the page POSTs the report automatically (or press **Send**).
 
 ## Get the engine log too

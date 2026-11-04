@@ -132,12 +132,26 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 f.write(base64.b64decode(m.group(2)))
             saved += 1
 
+        clip = (data.get("audio") or {}).get("clip") or {}
+        clip_url = clip.get("dataUrl") or ""
+        if clip_url:
+            m = re.match(r"^data:audio/([^;,]+)[^,]*;base64,(.*)$", clip_url, re.S)
+            if m:
+                kind = m.group(1).split(";")[0].lower()
+                ext = {"webm": "webm", "ogg": "ogg", "wav": "wav", "mp4": "m4a"}.get(kind, "bin")
+                clip_path = os.path.join(REPORTS, f"{base}-microphone.{ext}")
+                with open(clip_path, "wb") as f:
+                    f.write(base64.b64decode(m.group(2)))
+                print(f"[audio] {clip_path} ({clip.get('bytes', '?')} bytes)")
+
         env = data.get("env") or {}
         summary = data.get("summary") or {}
         print(f"[report] {json_path}  ({len(body)} bytes, {saved} snapshot(s))")
         print(f"         UA: {env.get('userAgent', '?')[:90]}")
+        audio = summary.get("audio")
         print(f"         tests={summary.get('tests')} failed={summary.get('failed')} "
-              f"cameras={len(data.get('devices') or [])}")
+              f"cameras={len(data.get('devices') or [])}"
+              + (f" audio={audio}" if audio else ""))
 
         msg = f"saved {os.path.basename(json_path)}"
         self.send_response(200)

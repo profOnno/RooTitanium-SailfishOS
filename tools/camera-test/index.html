@@ -49,6 +49,7 @@
 <div class="card">
   <div class="row">
     <button id="run" class="primary">Run full test</button>
+    <button id="mic">Test microphone</button>
     <button id="stress">Switch ×10</button>
     <button id="snap">Snapshot</button>
     <button id="stop" class="stop">Stop</button>
@@ -133,7 +134,7 @@ function log(msg, level = "info") {
 
 function setBusy(b) {
   running = b;
-  for (const id of ["#run", "#stress", "#snap", "#open", "#devices"]) $(id).disabled = b;
+  for (const id of ["#run", "#stress", "#snap", "#open", "#devices", "#mic"]) $(id).disabled = b;
   $("#pillRun").textContent = b ? "running" : "idle";
 }
 
@@ -594,11 +595,156 @@ async function runStress() {
   }
 }
 
+async function enumerateAudio() {
+  const all = await navigator.mediaDevices.enumerateDevices();
+  return all.filter((d) => d.kind === "audioinput").map((d) => ({
+    deviceId: d.deviceId, label: d.label, groupId: d.groupId,
+  }));
+}
+
+function blobToDataURL(blob) {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(r.result);
+    r.onerror = () => reject(r.error || new Error("FileReader failed"));
+    r.readAsDataURL(blob);
+  });
+}
+
+async function measureAudio(stream, ms = 1500) {
+  const Ctx = window.AudioContext || window.webkitAudioContext;
+  if (!Ctx) throw new Error("AudioContext unavailable");
+  const ctx = new Ctx();
+  await ctx.resume().catch(() => {});
+  const src = ctx.createMediaStreamSource(stream);
+  const analyser = ctx.createAnalyser();
+  analyser.fftSize = 2048;
+  src.connect(analyser);
+  const buf = new Float32Array(analyser.fftSize);
+  let frames = 0, sum = 0, peak = 0, silent = 0;
+  const t0 = performance.now();
+  while (performance.now() - t0 < ms) {
+    analyser.getFloatTimeDomainData(buf);
+    let s = 0, p = 0;
+    for (let i = 0; i < buf.length; i++) {
+      const v = buf[i];
+      s += v * v;
+      p = Math.max(p, Math.abs(v));
+    }
+    const rms = Math.sqrt(s / buf.length);
+    frames++; sum += rms; peak = Math.max(peak, p);
+    if (rms < 0.003) silent++;   // ~ -50 dBFS
+    await sleep(50);
+  }
+  const mean = sum / Math.max(frames, 1);
+  const out = {
+    frames, meanRms: round(mean), peak: round(peak),
+    meanDb: round(20 * Math.log10(Math.max(mean, 1e-8))),
+    peakDb: round(20 * Math.log10(Math.max(peak, 1e-8))),
+    silentFrames: silent, silentRatio: round(silent / Math.max(frames, 1)),
+    sampleRate: ctx.sampleRate, contextState: ctx.state,
+  };
+  try { src.disconnect(); } catch (e) {}
+  await ctx.close().catch(() => {});
+  return out;
+}
+
+async function recordAudio(stream, ms = 3000) {
+  if (!window.MediaRecorder) return null;
+  const mime = MediaRecorder.isTypeSupported("audio/webm;codecs=opus") ? "audio/webm;codecs=opus" :
+               (MediaRecorder.isTypeSupported("audio/webm") ? "audio/webm" : "");
+  const rec = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
+  const chunks = [];
+  rec.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
+  const stopped = new Promise((r) => { rec.onstop = r; });
+  rec.start();
+  await sleep(ms);
+  rec.stop();
+  await stopped;
+  const blob = new Blob(chunks, { type: rec.mimeType || "audio/webm" });
+  return { mime: blob.type, bytes: blob.size, dataUrl: await blobToDataURL(blob) };
+}
+
+async function testMicrophone() {
+  if (running) return;
+  setBusy(true);
+  report.audio = { startedAt: new Date().toISOString(), devicesBefore: [] };
+  report.note = $("#note").value || "";
+  $("#log").textContent = "";
+  try {
+    await environment();
+    report.audio.devicesBefore = await enumerateAudio();
+    log("microphone: asking permission — speak into it during the test", "step");
+    const t0 = performance.now();
+    const stream = await withTimeout(
+      navigator.mediaDevices.getUserMedia({ audio: true }), 15000, "microphone");
+    report.audio.gumMs = round(performance.now() - t0);
+    report.audio.devicesAfter = await enumerateAudio();
+    const track = stream.getAudioTracks()[0];
+    report.audio.track = trackInfo(track);
+    report.audio.label = track ? track.label : "";
+    report.audio.stats = await measureAudio(stream, 1500);
+    log(`microphone: peak ${report.audio.stats.peakDb} dBFS, mean ${report.audio.stats.meanDb} dBFS`,
+        report.audio.stats.peak > 0.001 ? "ok" : "warn");
+    try { report.audio.clip = await recordAudio(stream, 3000); }
+    catch (e) { report.audio.recordError = errInfo(e); }
+    stopStream(stream);
+    await sleep(300);
+
+    // The path Jitsi/Meet use: audio and video in the same getUserMedia call.
+    log("microphone: combined audio+video", "step");
+    const t1 = performance.now();
+    let combo = null;
+    try {
+      combo = await withTimeout(
+        navigator.mediaDevices.getUserMedia({ audio: true, video: true }), 15000, "audio+video");
+      report.audio.combinedGumMs = round(performance.now() - t1);
+      report.audio.combinedTracks = combo.getTracks().map((t) => ({
+        kind: t.kind, label: t.label, state: t.readyState,
+      }));
+      report.audio.combinedTrack = trackInfo(combo.getAudioTracks()[0]);
+      const vt = combo.getVideoTracks()[0];
+      if (vt) {
+        video.srcObject = combo;
+        try { await video.play(); } catch (e) {}
+        try { await waitFrame(4000); }
+        catch (e) { report.audio.combinedVideoError = errInfo(e); }
+        report.audio.combinedVideoSize = { width: video.videoWidth, height: video.videoHeight };
+      }
+      report.audio.combinedStats = await measureAudio(combo, 1200);
+      log(`audio+video: ${combo.getTracks().map((t) => t.kind).join("+")}, ` +
+          `mic peak ${report.audio.combinedStats.peakDb} dBFS`, "ok");
+      stopStream(combo);
+      video.srcObject = null;
+    } catch (e) {
+      report.audio.combinedError = errInfo(e);
+      log("audio+video: " + (e && e.message ? e.message : e), "bad");
+      if (combo) stopStream(combo);
+    }
+    report.audio.ok = !!(report.audio.stats && report.audio.stats.peak > 0.001);
+  } catch (e) {
+    report.audio.error = errInfo(e);
+    report.audio.ok = false;
+    log("microphone: " + (e && e.message ? e.message : e), "bad");
+  } finally {
+    stopCurrent();
+    report.audio.finishedAt = new Date().toISOString();
+    report.summary = summarize();
+    setBusy(false);
+    await sendReport();
+  }
+}
+
 function summarize() {
   const tests = report.tests || [];
   const failed = tests.filter((t) => t.ok === false);
   const stress = (report.stress && report.stress.switches) || [];
   const stressFailed = stress.filter((s) => s.ok === false);
+  const audio = report.audio ? {
+    ok: !!report.audio.ok,
+    peakDb: report.audio.stats ? report.audio.stats.peakDb : null,
+    combined: !!(report.audio.combinedStats),
+  } : null;
   return {
     tests: tests.length,
     failed: failed.length + stressFailed.length,
@@ -606,6 +752,7 @@ function summarize() {
     stressSwitches: stress.length,
     stressFailed: stressFailed.length,
     snapshots: (report.snapshots || []).length,
+    audio,
   };
 }
 
@@ -646,6 +793,7 @@ function downloadReport() {
 
 // --- manual buttons ---------------------------------------------------------
 $("#run").addEventListener("click", runFull);
+$("#mic").addEventListener("click", testMicrophone);
 $("#stress").addEventListener("click", runStress);
 $("#download").addEventListener("click", downloadReport);
 $("#send").addEventListener("click", sendReport);
