@@ -10,7 +10,11 @@ together with one JPEG per snapshot.
     python3 server.py --port 9443
     python3 server.py --no-qr         # skip the console QR
     python3 server.py --url https://my.host:8443/   # override printed/QR URL
+    python3 server.py --reports-dir /path/to/reports
     python3 server.py --http          # only for localhost experiments
+
+Reports are written next to this script (./reports) by default; the folder is
+created at startup and is also browsable at /reports/ from the phone.
 
 On the phone open https://<this-machine-lan-ip>:8443/ and accept the certificate
 warning once. Reports land in ./reports/ (JSON + snapshots). Nothing is sent
@@ -198,6 +202,7 @@ def print_qr(url):
 
 
 def main():
+    global REPORTS
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--host", default="0.0.0.0")
@@ -207,7 +212,12 @@ def main():
     ap.add_argument("--url", help="URL to print/encode (default: auto from the LAN IP)")
     ap.add_argument("--cert", default=os.path.join(HERE, "cert.pem"))
     ap.add_argument("--key", default=os.path.join(HERE, "key.pem"))
+    ap.add_argument("--reports-dir", default=REPORTS,
+                    help="where to write the JSON/JPEG reports (default: ./reports)")
     args = ap.parse_args()
+
+    REPORTS = os.path.abspath(os.path.expanduser(args.reports_dir))
+    os.makedirs(REPORTS, exist_ok=True)
 
     ip = lan_ip()
     cert, key = args.cert, args.key

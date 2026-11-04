@@ -60,6 +60,8 @@
   <div class="row" style="margin-top:8px">
     <button id="download">Download JSON</button>
     <button id="send">Send to server</button>
+    <a id="reportsLink" href="reports/" target="_blank"
+       style="display:none;align-self:center">open reports folder</a>
   </div>
   <div class="hint" style="margin-top:8px">
     Do not lock the screen or leave the app while a test runs. The video preview must stay visible.
@@ -476,6 +478,7 @@ async function testApplyConstraints(A, B) {
     entry.ok = !!(entry.after && entry.after.ok);
   } catch (e) {
     entry.error = errInfo(e);
+    entry.ok = false;
   }
   stopCurrent();
   report.tests.push(entry);
@@ -618,6 +621,10 @@ async function sendReport() {
     const txt = await res.text();
     report.sent = { ok: res.ok, response: txt.trim() };
     log("report sent: " + txt.trim(), res.ok ? "ok" : "warn");
+    if (res.ok) {
+      const link = $("#reportsLink");
+      if (link) link.style.display = "inline";
+    }
   } catch (e) {
     report.sent = { ok: false, error: String(e) };
     log("report POST failed (use Download JSON): " + e, "warn");

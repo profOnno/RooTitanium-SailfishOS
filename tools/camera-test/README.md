@@ -36,6 +36,12 @@ It prints something like:
   reports:      /.../tools/camera-test/reports
 ```
 
+Reports are written next to `server.py` (`./reports`) and the folder is created
+at startup. They are also browsable from the phone at
+`https://<address>:8443/reports/` (the JSON and every snapshot). To put them
+somewhere else — e.g. a directory the host already shares — use
+`--reports-dir /path/to/reports`.
+
 On the phone open that URL, accept the self-signed certificate warning once.
 `getUserMedia` requires a secure context; plain HTTP will not work (except on
 `localhost`, which the phone is not).
