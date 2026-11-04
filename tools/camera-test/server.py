@@ -9,6 +9,7 @@ together with one JPEG per snapshot.
     python3 server.py                 # HTTPS on :8443, self-signed cert, QR in console
     python3 server.py --port 9443
     python3 server.py --no-qr         # skip the console QR
+    python3 server.py --url https://my.host:8443/   # override printed/QR URL
     python3 server.py --http          # only for localhost experiments
 
 On the phone open https://<this-machine-lan-ip>:8443/ and accept the certificate
@@ -203,6 +204,7 @@ def main():
     ap.add_argument("--port", type=int, default=8443)
     ap.add_argument("--http", action="store_true", help="plain HTTP (localhost only)")
     ap.add_argument("--no-qr", action="store_true", help="do not print the QR code")
+    ap.add_argument("--url", help="URL to print/encode (default: auto from the LAN IP)")
     ap.add_argument("--cert", default=os.path.join(HERE, "cert.pem"))
     ap.add_argument("--key", default=os.path.join(HERE, "key.pem"))
     args = ap.parse_args()
@@ -223,14 +225,15 @@ def main():
         httpd.socket = ctx.wrap_socket(httpd.socket, server_side=True)
 
     print()
-    print(f"  camera test:  {scheme}://{ip}:{args.port}/")
+    url = args.url or f"{scheme}://{ip}:{args.port}/"
+    print(f"  camera test:  {url}")
     print(f"  also:         {scheme}://localhost:{args.port}/")
     print(f"  reports:      {REPORTS}")
     if not args.http:
         print("  certificate is self-signed: accept the warning on the phone once.")
     if not args.no_qr:
         print("  scan to open on the phone:")
-        print_qr(f"{scheme}://{ip}:{args.port}/")
+        print_qr(url)
     print("  Ctrl-C to stop.")
     print()
     try:

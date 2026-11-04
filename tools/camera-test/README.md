@@ -46,6 +46,10 @@ with the phone camera. Use `--no-qr` to skip it, or install the tool with
 `sudo apt install qrencode` / `pip install qrcode` if the server says no QR
 backend is available.
 
+If the auto-detected LAN address is not the one the phone should use (multiple
+interfaces, port forwarding, VPN), pass the exact address with
+`--url https://<address>:8443/`; both the printed line and the QR use it.
+
 You can also copy `index.html` to any HTTPS host you already have. Then use
 **Download JSON** instead of **Send to server** (the page has no other network
 access).
