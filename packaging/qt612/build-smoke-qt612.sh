@@ -20,13 +20,13 @@ INC="-I$I -I$I/QtCore -I$I/QtGui -I$I/QtQml -I$I/QtDBus -I$I/QtGui/$V -I$I/QtGui
 # copia: si prendono dai sorgenti da cui e' compilato QUESTO motore.
 WV=6.140.0
 INC="$INC -I$I/QtWebEngineCore/$WV -I$I/QtWebEngineCore/$WV/QtWebEngineCore -I$I/QtWebEngineCore/$WV/QtWebEngineCore/private -I$I/QtWebEngineQuick/$WV -I$I/QtWebEngineQuick/$WV/QtWebEngineQuick -I$R/scratch/qtwebengine-6.140/src/core"
-sb2 -t $T /usr/$L/qt6/libexec/moc $INC main.cpp -o main.moc
-sb2 -t $T c++ -std=c++17 -fPIC -O2 $INC main.cpp -o webengine-smoke \
+sb2 -t $T -R /usr/$L/qt6/libexec/moc $INC main.cpp -o main.moc
+sb2 -t $T -R c++ -std=c++17 -fPIC -O2 $INC main.cpp -o webengine-smoke \
   -L/usr/$L -lQt6WebEngineQuick -lQt6WebEngineCore -lQt6Qml -lQt6DBus -lQt6Gui -lQt6Core -lwayland-client
-sb2 -t $T strip webengine-smoke
+sb2 -t $T -R strip webengine-smoke
 file webengine-smoke
 # __has_include fallisce in silenzio: se mancano gli header il blocco non entra
 # e l'app perde la funzione senza errori. Meglio fermarsi qui.
-sb2 -t $T nm -D webengine-smoke | grep -q deleteVisitedLinkDataForUrls \
+sb2 -t $T -R nm -D webengine-smoke | grep -q deleteVisitedLinkDataForUrls \
   || { echo "ERRORE: blocco RT_VISITED_LINKS non compilato (header mancanti?)"; exit 1; }
 echo "ok: link visitati compilati"
