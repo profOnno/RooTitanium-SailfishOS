@@ -198,6 +198,20 @@ int main(int argc, char **argv) {
                             "(--ignore-certificate-errors)\n");
     }
 
+    /* Con DEBUG attivo servono anche gli INFO di Chromium: senza
+     * --enable-logging restano solo gli ERROR e il ciclo di vita della camera
+     * (requested/preview/first frame/stopped) non arriva nel log. */
+    if (access("/home/rootitanium/DEBUG", F_OK) == 0) {
+        const char *cur = getenv("QTWEBENGINE_CHROMIUM_FLAGS");
+        if (cur && !strstr(cur, "--enable-logging")) {
+            char buf[8192];
+            int n = snprintf(buf, sizeof(buf),
+                             "%s --enable-logging=stderr --log-level=0", cur);
+            if (n > 0 && (size_t)n < sizeof(buf))
+                setenv("QTWEBENGINE_CHROMIUM_FLAGS", buf, 1);
+        }
+    }
+
     /* execv del binario webengine-smoke, ma con argv[0] FORGIATO =
      * /usr/bin/harbour-rootitanium, cioe' il PERCORSO COMPLETO del binario
      * della riga Exec del .desktop. Lipstick riconosce la finestra di un'app

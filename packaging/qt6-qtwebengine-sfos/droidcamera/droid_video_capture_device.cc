@@ -600,13 +600,25 @@ void DroidVideoCaptureDevice::OnBuffersReleased(void* data) {
 
 // static
 void DroidVideoCaptureDevice::OnCameraError(void* data, int error) {
-  LOG(ERROR) << "droidmedia camera: vendor error: " << error;
   auto* ponte = static_cast<Ponte*>(data);
-  if (ponte) {
-    ponte->Run([](DroidVideoCaptureDevice* self) {
-      self->FailFrame("error reported by the camera");
-    });
+  if (!ponte) {
+    return;
   }
+  ponte->Run([error](DroidVideoCaptureDevice* self) {
+    // The vendor reports CAMERA_ERROR_EVICTED (2) while a session is being
+    // closed: stop_preview/disconnect make the HAL evict the client. That is
+    // expected on teardown and must not reach Chromium's client, or a camera
+    // switch looks like a fatal capture error (black/frozen preview until the
+    // track is restarted). Only an error while running_ is a real failure.
+    if (!self->running_) {
+      LOG(INFO) << "droidmedia camera " << self->camera_index_
+                << ": vendor error " << error
+                << " during teardown (ignored)";
+      return;
+    }
+    LOG(ERROR) << "droidmedia camera: vendor error: " << error;
+    self->FailFrame("error reported by the camera");
+  });
 }
 
 }  // namespace media

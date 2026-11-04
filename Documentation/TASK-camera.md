@@ -113,20 +113,25 @@ translation unit, so their `ParseSize` helpers had to be renamed. The
 - RPM `harbour-rootitanium-2.9.2-2.aarch64.rpm` (115 MB) costruito e verificato:
   payload identico al bundle, plugin nuovo incluso.
 
-### Phase 2 — device test: ⬜ to do (serve l'Xperia)
-Strumento pronto in `tools/camera-test/`: pagina di test + server HTTPS che
-salva i referti (`python3 server.py`, poi si apre l'URL sul telefono). Registra
-`enumerateDevices` prima/dopo il permesso, `getSettings`/`getCapabilities`,
-tempo al primo frame, luma/croma/frame unici (black/frozen), una snapshot JPEG
-per ogni misura e i test di cambio camera: stop/open, `applyConstraints`,
-seconda apertura mentre la prima è viva, riaperture ravvicinate. Il report JSON
-e le JPEG arrivano in `reports/`. Per il log nativo serve il file
-`/home/rootitanium/DEBUG` (non una variabile): il launcher scrive
-`/tmp/rootitanium.log`, da filtrare con `grep -i 'droidmedia camera'`.
-Il server di test è HTTPS self-signed: se RooTitanium mostra
-`ERR_CERT_AUTHORITY_INVALID`, dall'RPM 2.9.2-3 basta il marker
-`/home/rootitanium/ALLOW_BAD_CERT` (si crea prima del test e si rimuove subito
-dopo; disabilita la verifica TLS per tutti i siti).
+### Phase 2 — device test: 🟡 first run done (2026-11-04), retest after the fix
+First run with `tools/camera-test` on the Xperia 10 V: both cameras open, image
+upright and correct; back ~30 fps, front ~15–16 fps; 1280×720 and 480×640 both
+work; sequential switches and repeated open/close pass. Two findings:
+
+- `applyConstraints({deviceId})` → `OverconstrainedError`: Chromium does not
+  switch the device of a live track this way (expected; Jitsi normally replaces
+  the track with a new `getUserMedia`).
+- the native log had `vendor error: 2` (`CAMERA_ERROR_EVICTED`) exactly at the
+  switches. The HAL emits it while the session is being closed; the code was
+  reporting it to Chromium as a fatal capture error, which can leave the next
+  preview black/frozen. Fixed in `droid_video_capture_device.cc`: errors are
+  ignored when `running_` is false (teardown). Rebuilt in 2.9.2-4.
+
+Retest with 2.9.2-4 and the **Switch ×10** button; the launcher now enables
+Chromium INFO logs when `DEBUG` exists, so the log includes
+`requested`/`preview`/`first frame`/`stopped` around each error. Il server di
+test è HTTPS self-signed: serve il marker `/home/rootitanium/ALLOW_BAD_CERT`
+(dall'RPM 2.9.2-3), da rimuovere subito dopo il test.
 
 Test page (local file, no network):
 

@@ -111,7 +111,31 @@ nothing.
 ## Status
 
 **Written 2026-11-03. Compiled on 2026-11-04 into QtWebEngine 6.140
-(aarch64); never run on a device yet.**
+(aarch64); first device test on the Xperia 10 V on 2026-11-04.**
+
+### First device test (2026-11-04)
+
+`getUserMedia` works, both cameras open, and the image is upright with the
+right colours. The report (`tools/camera-test`) shows:
+
+- back camera ~30 fps, front camera ~15–16 fps; 1280×720 and 480×640 work;
+- stop→open switching in both directions and repeated open/close pass;
+- `applyConstraints({deviceId})` fails with `OverconstrainedError` (Chromium
+  does not switch the device of a live track that way; expected, not a driver
+  bug);
+- the only native errors were `vendor error: 2` = `CAMERA_ERROR_EVICTED`,
+  emitted by the HAL **while the session is being closed**.
+
+That last point was a real bug: `OnCameraError()` called `FailFrame()` even
+during teardown, so a normal eviction notice was reported to Chromium as a
+fatal capture error. During a camera switch that can leave the new preview
+black/frozen until the track is restarted. Fixed by ignoring vendor errors when
+`running_` is false (and logging them as teardown at INFO). Rebuilt as
+`harbour-rootitanium-2.9.2-4`; needs a retest with the switch stress test.
+
+The launcher now adds `--enable-logging=stderr --log-level=0` when
+`/home/rootitanium/DEBUG` exists, so the next log also contains `requested`,
+`preview`, `first frame` and `stopped`, not just the ERROR lines.
 
 The first real compile found two errors, both fixed:
 
