@@ -42,8 +42,16 @@ accetta ancora la chiave `wayland-egl` (qwayland.json), quindi
 Usa API private di Qt (`QPlatformInputContext`): quello di chum compilato per
 6.8 non si carica su 6.12 e va ricompilato. Sorgente esatto del pacchetto in
 uso: repo chum `qt-sfos-maliit-platforminputcontext` commit `9bb86e6`, il cui
-sottomodulo `upstream` = `sailfishos-flatpak/maliit-framework` `f5aa5d6`.
-Opzioni cmake quelle di `rpm/plugin.spec` (solo `enable-qt6-inputcontext`).
-Su Qt >= 6.10 serve `../harbour-rootitanium/maliit-qt6.10-guiprivate.patch`
-(richiede esplicitamente `Qt6::GuiPrivate`, altrimenti moc non trova
-`qpa/*_p.h`). Licenza LGPL-2.1: la patch va pubblicata con il binario (è qui).
+sottomodulo `upstream` = `sailfishos-open/maliit-framework` `f5aa5d6` (ramo
+`qt6`). Opzioni cmake quelle di `rpm/plugin.spec` (solo
+`enable-qt6-inputcontext`). Su Qt >= 6.10 serve
+`../harbour-rootitanium/maliit-qt6.10-guiprivate.patch` (richiede esplicitamente
+`Qt6::GuiPrivate`, altrimenti moc non trova `qpa/*_p.h`). Licenza LGPL-2.1: la
+patch va pubblicata con il binario (è qui).
+
+Build: `ARCH=aarch64 packaging/qt612/build-maliit-qt612.sh` (clone dei sorgenti
+al primo giro, patch idempotente, output in
+`scratch/qt612/build-$ARCH/maliit/`). Verificato il 4 nov 2026 con
+`QPluginLoader` sul target: il plugin carica contro Qt 6.12 con IID
+`org.qt-project.Qt.QPlatformInputContextFactoryInterface.5.1`.
+

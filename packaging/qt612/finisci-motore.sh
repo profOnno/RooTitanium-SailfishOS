@@ -16,8 +16,14 @@ for d in core process webenginequick; do
 done
 echo "== webengine-smoke"
 sdk_run "ARCH=$ARCH bash $R/packaging/qt612/build-smoke-qt612.sh" 2>&1 | grep -v WARNING | tail -2
+echo "== plugin posizione (solo se manca)"
+POS=$R/packaging/rt-position-plugin/build-$ARCH-qt612/libqtposition_rtgeoclue1.so
+[ -f "$POS" ] || ARCH=$ARCH QT612=1 bash "$R/packaging/rt-position-plugin/build.sh"
+echo "== plugin Maliit (solo se manca)"
+MAL=$R/scratch/qt612/build-$ARCH/maliit/libmaliitplatforminputcontextplugin.so
+[ -f "$MAL" ] || ARCH=$ARCH bash "$R/packaging/qt612/build-maliit-qt612.sh"
 echo "== bundle"
 sdk_run "python3 $R/packaging/qt612/assembla-bundle-qt612.py --arch $ARCH \
   --smoke $R/scratch/qt612/build-$ARCH/smoke/webengine-smoke \
-  --position $R/packaging/rt-position-plugin/build-$ARCH-qt612/libqtposition_rtgeoclue1.so \
-  --maliit $R/scratch/qt612/build-$ARCH/maliit/libmaliitplatforminputcontextplugin.so"
+  --position $POS \
+  --maliit $MAL"

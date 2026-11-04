@@ -77,6 +77,15 @@ for e in os.listdir(SRC):
         continue
     s = f"{SRC}/{e}"
     (shutil.copytree if os.path.isdir(s) and not os.path.islink(s) else shutil.copy2)(s, f"{DST}/{e}")
+# I file dell'app vengono SEMPRE dal repo, non dallo staging: lo staging puo'
+# essere la base gia' trimmata di una release precedente (nel 2026-11 era la
+# 2.8.1) e il bundle non deve regredire test.qml/run.sh/icone alla versione
+# vecchia. kbd-layouts e LICENSES restano quelli dello staging (non sono nel
+# repo nella forma completa).
+APP = f"{R}/smoke-test"
+for f in ("test.qml", "run.sh", "Readability.js", "rootitanium.png"):
+    if os.path.isfile(f"{APP}/{f}"):
+        shutil.copy2(f"{APP}/{f}", f"{DST}/{f}")
 shutil.copy2(a.smoke, f"{DST}/webengine-smoke")
 
 # lib/: non-Qt dal bundle 2.x, Qt dal target
@@ -183,7 +192,7 @@ for dp, dn, fn in os.walk(DST):
         if not os.path.islink(p) and is_elf(p):
             elfs.append(p)
 for i in range(0, len(elfs), 200):
-    subprocess.run(["sb2", "-t", T, "strip", "--strip-unneeded"] + elfs[i:i + 200],
+    subprocess.run(["sb2", "-t", T, "-R", "strip", "--strip-unneeded"] + elfs[i:i + 200],
                    capture_output=True, env=ENV)
 
 

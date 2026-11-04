@@ -96,7 +96,24 @@ QtWebEngine 6.140 (aarch64) built and installed with the camera code in
 translation unit, so their `ParseSize` helpers had to be renamed. The
 `webengine-smoke` binary against the installed engine also builds.
 
-### Phase 2 — device test: ⬜ to do
+### Phase 1b — bundle e RPM: ✅ fatto (2026-11-04)
+- Plugin posizione ricompilato per Qt 6.12 (`packaging/rt-position-plugin/build.sh`,
+  aggiunto `-R` a moc/c++/strip come per gli altri script sb2).
+- Plugin Maliit ricompilato per Qt 6.12 con
+  `packaging/qt612/build-maliit-qt612.sh` (chum `9bb86e6`, upstream
+  `sailfishos-open/maliit-framework` `f5aa5d6`, patch GuiPrivate). Il vecchio
+  binario di chum è per Qt 6.8 e non si carica: verificato con `QPluginLoader`
+  sul target che il nuovo si carica
+  (`org.qt-project.Qt.QPlatformInputContextFactoryInterface.5.1`).
+- Bundle assemblato con `assembla-bundle-qt612.py`: `BUNDLE-OK`, 354 MB,
+  nessun NEEDED scoperto. Il motore strippato è 189 MB e contiene i log
+  `droidmedia camera`. L'assembler ora riprende sempre `test.qml`, `run.sh`,
+  `Readability.js` e l'icona dal repo, così lo staging di una release vecchia
+  non fa regredire l'app.
+- RPM `harbour-rootitanium-2.9.2-2.aarch64.rpm` (115 MB) costruito e verificato:
+  payload identico al bundle, plugin nuovo incluso.
+
+### Phase 2 — device test: ⬜ to do (serve l'Xperia)
 Test page (local file, no network):
 
 ```html

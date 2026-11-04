@@ -28,8 +28,11 @@ esac
 OUT=${QT612:+build-$ARCH-qt612}; OUT=${OUT:-build-$ARCH}
 INC="-I/usr/include/qt6 -I/usr/include/qt6/QtCore -I/usr/include/qt6/QtDBus -I/usr/include/qt6/QtPositioning"
 mkdir -p $OUT
-sb2 -t "$T" /usr/$L/qt6/libexec/moc $INC rtgeoclue1.cpp -o $OUT/rtgeoclue1.moc
-sb2 -t "$T" c++ -std=c++17 -fPIC -O2 -shared $INC -I$OUT rtgeoclue1.cpp \
+# -R: senza, sb2 tratta i path dell'host (il repo su /mnt/ai_workspace) come
+# read-only e moc/c++ non possono scrivere in $OUT (stesso fix di
+# build-smoke-qt612.sh).
+sb2 -t "$T" -R /usr/$L/qt6/libexec/moc $INC rtgeoclue1.cpp -o $OUT/rtgeoclue1.moc
+sb2 -t "$T" -R c++ -std=c++17 -fPIC -O2 -shared $INC -I$OUT rtgeoclue1.cpp \
   -o $OUT/libqtposition_rtgeoclue1.so -L/usr/$L -lQt6Positioning -lQt6DBus -lQt6Core
-sb2 -t "$T" strip $OUT/libqtposition_rtgeoclue1.so
+sb2 -t "$T" -R strip $OUT/libqtposition_rtgeoclue1.so
 ls -l $OUT/libqtposition_rtgeoclue1.so
