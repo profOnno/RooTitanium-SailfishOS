@@ -6,8 +6,9 @@ must load the page over HTTPS. This script serves ../index.html (same directory)
 and accepts the JSON report the page POSTs at the end, saving it under reports/
 together with one JPEG per snapshot.
 
-    python3 server.py                 # HTTPS on :8443, self-signed cert
+    python3 server.py                 # HTTPS on :8443, self-signed cert, QR in console
     python3 server.py --port 9443
+    python3 server.py --no-qr         # skip the console QR
     python3 server.py --http          # only for localhost experiments
 
 On the phone open https://<this-machine-lan-ip>:8443/ and accept the certificate
@@ -21,6 +22,7 @@ import http.server
 import json
 import os
 import re
+import shutil
 import socket
 import ssl
 import subprocess
@@ -142,12 +144,65 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         print("[http]", fmt % args)
 
 
+def print_qr(url):
+    """Print a scannable QR for `url` in the terminal (best-effort).
+
+    Backends, in order: qrencode(1) (ANSI colours on a tty, UTF-8 otherwise),
+    the Python `qrcode` package, then `segno`. If none is installed the URL is
+    still printed above; this function only adds the QR.
+    """
+    # 1) qrencode CLI (installed here; apt install qrencode)
+    exe = shutil.which("qrencode")
+    if exe:
+        # ANSIUTF8 is background-independent and scans well on dark terminals;
+        # UTF8 is cleaner when stdout is redirected to a file/log.
+        modes = ["ANSIUTF8", "UTF8"] if sys.stdout.isatty() else ["UTF8"]
+        for mode in modes:
+            try:
+                p = subprocess.run([exe, "-t", mode, "-m", "1", "-o", "-", url],
+                                   capture_output=True)
+            except OSError:
+                break
+            if p.returncode == 0 and p.stdout:
+                sys.stdout.write(p.stdout.decode("utf-8", "replace"))
+                if not p.stdout.endswith(b"\n"):
+                    sys.stdout.write("\n")
+                sys.stdout.flush()
+                return True
+
+    # 2) python qrcode
+    try:
+        import qrcode
+        qr = qrcode.QRCode(border=1,
+                           error_correction=qrcode.constants.ERROR_CORRECT_M)
+        qr.add_data(url)
+        qr.make(fit=True)
+        qr.print_ascii(invert=True)
+        sys.stdout.flush()
+        return True
+    except Exception:
+        pass
+
+    # 3) segno
+    try:
+        import segno
+        segno.make(url, error="m").terminal(compact=True)
+        sys.stdout.flush()
+        return True
+    except Exception:
+        pass
+
+    print("  (no QR backend found: install qrencode, python3-qrcode or segno)")
+    return False
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--host", default="0.0.0.0")
     ap.add_argument("--port", type=int, default=8443)
     ap.add_argument("--http", action="store_true", help="plain HTTP (localhost only)")
+    ap.add_argument("--no-qr", action="store_true", help="do not print the QR code")
     ap.add_argument("--cert", default=os.path.join(HERE, "cert.pem"))
     ap.add_argument("--key", default=os.path.join(HERE, "key.pem"))
     args = ap.parse_args()
@@ -173,6 +228,9 @@ def main():
     print(f"  reports:      {REPORTS}")
     if not args.http:
         print("  certificate is self-signed: accept the warning on the phone once.")
+    if not args.no_qr:
+        print("  scan to open on the phone:")
+        print_qr(f"{scheme}://{ip}:{args.port}/")
     print("  Ctrl-C to stop.")
     print()
     try:

@@ -40,6 +40,12 @@ On the phone open that URL, accept the self-signed certificate warning once.
 `getUserMedia` requires a secure context; plain HTTP will not work (except on
 `localhost`, which the phone is not).
 
+The server also prints a **QR code** of that URL in the terminal (via
+`qrencode`; if it is missing it falls back to `python3-qrcode`/`segno`). Scan it
+with the phone camera. Use `--no-qr` to skip it, or install the tool with
+`sudo apt install qrencode` / `pip install qrcode` if the server says no QR
+backend is available.
+
 You can also copy `index.html` to any HTTPS host you already have. Then use
 **Download JSON** instead of **Send to server** (the page has no other network
 access).
