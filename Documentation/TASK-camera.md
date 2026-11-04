@@ -114,6 +114,16 @@ translation unit, so their `ParseSize` helpers had to be renamed. The
   payload identico al bundle, plugin nuovo incluso.
 
 ### Phase 2 — device test: ⬜ to do (serve l'Xperia)
+Strumento pronto in `tools/camera-test/`: pagina di test + server HTTPS che
+salva i referti (`python3 server.py`, poi si apre l'URL sul telefono). Registra
+`enumerateDevices` prima/dopo il permesso, `getSettings`/`getCapabilities`,
+tempo al primo frame, luma/croma/frame unici (black/frozen), una snapshot JPEG
+per ogni misura e i test di cambio camera: stop/open, `applyConstraints`,
+seconda apertura mentre la prima è viva, riaperture ravvicinate. Il report JSON
+e le JPEG arrivano in `reports/`. Per il log nativo serve il file
+`/home/rootitanium/DEBUG` (non una variabile): il launcher scrive
+`/tmp/rootitanium.log`, da filtrare con `grep -i 'droidmedia camera'`.
+
 Test page (local file, no network):
 
 ```html

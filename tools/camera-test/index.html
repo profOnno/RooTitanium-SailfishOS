@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>RooTitanium camera test</title>
+<style>
+  :root { color-scheme: dark; --bg:#101014; --card:#1c1c22; --line:#34343d;
+          --fg:#e8e8ef; --muted:#9aa0a6; --ok:#4ea866; --warn:#d9a441;
+          --bad:#e05a5a; --accent:#3a5fc0; }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:12px; background:var(--bg); color:var(--fg);
+         font:15px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  h1 { font-size:18px; margin:0 0 4px; }
+  .sub { color:var(--muted); font-size:12px; margin-bottom:12px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px;
+          padding:12px; margin-bottom:12px; }
+  .row { display:flex; flex-wrap:wrap; gap:8px; }
+  button, select, textarea { font:inherit; }
+  button { background:#2c2c34; color:var(--fg); border:1px solid var(--line);
+           border-radius:10px; padding:10px 14px; }
+  button.primary { background:var(--accent); border-color:var(--accent); font-weight:600; }
+  button:disabled { opacity:.45; }
+  button.stop { background:#5a2323; border-color:#7a2e2e; }
+  video { width:100%; max-height:42vh; background:#000; border-radius:10px;
+          object-fit:contain; }
+  #log { height:220px; overflow:auto; background:#0b0b0e; border:1px solid var(--line);
+         border-radius:10px; padding:8px; font:12px/1.45 ui-monospace, monospace;
+         white-space:pre-wrap; }
+  .l-info { color:#c8c8d0; } .l-ok { color:var(--ok); } .l-warn { color:var(--warn); }
+  .l-bad { color:var(--bad); } .l-step { color:#8ab4f8; font-weight:600; }
+  .hint { color:var(--muted); font-size:12px; }
+  .pill { display:inline-block; padding:2px 8px; border-radius:999px;
+          background:#2c2c34; color:var(--muted); font-size:12px; margin-right:6px; }
+  textarea { width:100%; min-height:60px; background:#0b0b0e; color:var(--fg);
+             border:1px solid var(--line); border-radius:10px; padding:8px; }
+  a { color:#8ab4f8; }
+</style>
+</head>
+<body>
+<h1>RooTitanium camera test</h1>
+<div class="sub">getUserMedia / device switching diagnostics. Nothing leaves this page unless you press “Send”.</div>
+
+<div class="card">
+  <div id="envline" class="hint">checking environment…</div>
+  <div style="margin-top:10px"><video id="video" autoplay playsinline muted></video></div>
+</div>
+
+<div class="card">
+  <div class="row">
+    <button id="run" class="primary">Run full test</button>
+    <button id="stress">Switch ×10</button>
+    <button id="snap">Snapshot</button>
+    <button id="stop" class="stop">Stop</button>
+  </div>
+  <div class="row" style="margin-top:8px">
+    <select id="devices" style="flex:1 1 160px"><option value="">— devices after permission —</option></select>
+    <button id="open">Open selected</button>
+  </div>
+  <div class="row" style="margin-top:8px">
+    <button id="download">Download JSON</button>
+    <button id="send">Send to server</button>
+  </div>
+  <div class="hint" style="margin-top:8px">
+    Do not lock the screen or leave the app while a test runs. The video preview must stay visible.
+  </div>
+</div>
+
+<div class="card">
+  <div class="hint" style="margin-bottom:6px">What happened in Jitsi (optional, sent with the report):</div>
+  <textarea id="note" placeholder="e.g. after switching to front the preview stayed black until I stopped and restarted"></textarea>
+</div>
+
+<div class="card">
+  <div class="pill" id="pillRun">idle</div><span class="hint" id="pillInfo"></span>
+  <div id="log" style="margin-top:8px"></div>
+</div>
+
+<script>
+"use strict";
+const $ = (s) => document.querySelector(s);
+const video = $("#video");
+const runId = new Date().toISOString().replace(/[:.]/g, "-") + "-" +
+              Math.random().toString(36).slice(2, 6);
+
+// --- canvases ---------------------------------------------------------------
+const statCanvas = document.createElement("canvas");
+statCanvas.width = 64; statCanvas.height = 48;
+const statCtx = statCanvas.getContext("2d", { willReadFrequently: true });
+const snapCanvas = document.createElement("canvas");
+snapCanvas.width = 320; snapCanvas.height = 240;
+const snapCtx = snapCanvas.getContext("2d");
+
+// --- state ------------------------------------------------------------------
+let running = false;
+let currentStream = null;
+const report = { runId, tests: [], snapshots: [], logs: [] };
+// constraints used for the current measure(), for the report only
+const entryRequested = {};
+
+// --- small helpers ----------------------------------------------------------
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const round = (n) => (typeof n === "number" && isFinite(n) ? Math.round(n * 10) / 10 : n);
+const short = (d) => (d ? (d.label || d.deviceId || "?").replace(/ camera$/i, "") : "?");
+
+function errInfo(e) {
+  if (!e) return null;
+  return { name: e.name || "Error", message: String(e.message || e),
+           constraint: e.constraint || undefined };
+}
+
+function withTimeout(promise, ms, what) {
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`timeout after ${ms} ms: ${what}`)), ms);
+  });
+  return Promise.race([promise.finally(() => clearTimeout(timer)), timeout]);
+}
+
+function log(msg, level = "info") {
+  const line = { t: Date.now(), level, msg: String(msg) };
+  report.logs.push(line);
+  if (report.logs.length > 600) report.logs.shift();
+  const el = document.createElement("div");
+  el.className = "l-" + level;
+  el.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+  const box = $("#log");
+  box.appendChild(el);
+  box.scrollTop = box.scrollHeight;
+}
+
+function setBusy(b) {
+  running = b;
+  for (const id of ["#run", "#stress", "#snap", "#open", "#devices"]) $(id).disabled = b;
+  $("#pillRun").textContent = b ? "running" : "idle";
+}
+
+// --- environment ------------------------------------------------------------
+async function environment() {
+  report.env = {
+    userAgent: navigator.userAgent,
+    platform: navigator.platform,
+    secureContext: window.isSecureContext,
+    languages: navigator.languages,
+    devicePixelRatio: window.devicePixelRatio,
+    hardwareConcurrency: navigator.hardwareConcurrency,
+    maxTouchPoints: navigator.maxTouchPoints,
+    screen: { width: screen.width, height: screen.height },
+    mediaDevices: !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia),
+  };
+  const ok = report.env.secureContext && report.env.mediaDevices;
+  $("#envline").innerHTML =
+    `<span class="pill" style="color:${ok ? "var(--ok)" : "var(--bad)"}">` +
+    `${ok ? "secure context + mediaDevices" : "NOT usable"}</span>` +
+    ` ${navigator.userAgent}`;
+  log(`secureContext=${report.env.secureContext} mediaDevices=${report.env.mediaDevices}`, ok ? "info" : "bad");
+  if (!ok) throw new Error("serve this page over HTTPS (or localhost): getUserMedia is unavailable");
+}
+
+// --- devices ----------------------------------------------------------------
+async function enumerate() {
+  const all = await navigator.mediaDevices.enumerateDevices();
+  return all.filter((d) => d.kind === "videoinput").map((d) => ({
+    deviceId: d.deviceId, label: d.label, groupId: d.groupId,
+  }));
+}
+
+function refreshDevices(devices) {
+  const sel = $("#devices");
+  sel.innerHTML = "";
+  for (const d of devices) {
+    const o = document.createElement("option");
+    o.value = d.deviceId;
+    o.textContent = d.label || d.deviceId || "(unnamed)";
+    sel.appendChild(o);
+  }
+  $("#pillInfo").textContent = `${devices.length} video input(s): ` +
+    devices.map((d) => d.label || d.deviceId).join(", ");
+}
+
+function pickPair(ds) {
+  const back = ds.find((d) => /back/i.test(d.label)) || ds[0];
+  const front = ds.find((d) => /front/i.test(d.label)) ||
+                ds.find((d) => d.deviceId !== (back && back.deviceId));
+  return { A: back, B: front };
+}
+
+// --- frame sampling ---------------------------------------------------------
+function snapshotStats() {
+  if (!video.videoWidth || !video.videoHeight) return { valid: false, meanY: 0, chroma: 0, hash: 0 };
+  const w = statCanvas.width, h = statCanvas.height;
+  try { statCtx.drawImage(video, 0, 0, w, h); } catch (e) { return { valid: false, meanY: 0, chroma: 0, hash: 0 }; }
+  let d;
+  try { d = statCtx.getImageData(0, 0, w, h).data; } catch (e) { return { valid: false, meanY: 0, chroma: 0, hash: 0 }; }
+  let sumY = 0, sumC = 0, hash = 2166136261;
+  for (let i = 0; i < d.length; i += 4) {
+    const r = d[i], g = d[i + 1], b = d[i + 2];
+    const y = 0.299 * r + 0.587 * g + 0.114 * b;
+    sumY += y;
+    sumC += Math.abs(b - y) + Math.abs(r - y);
+    hash ^= (r << 16) ^ (g << 8) ^ b;
+    hash = Math.imul(hash, 16777619);
+  }
+  const n = w * h;
+  return { valid: true, meanY: sumY / n, chroma: sumC / n, hash: hash >>> 0 };
+}
+
+async function sampleFrames(n = 10, interval = 80) {
+  const hashes = new Set();
+  let sumY = 0, minY = 255, maxY = 0, sumC = 0, valid = 0;
+  for (let i = 0; i < n; i++) {
+    const s = snapshotStats();
+    if (s.valid) {
+      valid++; sumY += s.meanY; sumC += s.chroma;
+      minY = Math.min(minY, s.meanY); maxY = Math.max(maxY, s.meanY);
+      hashes.add(s.hash);
+    }
+    await sleep(interval);
+  }
+  const meanY = sumY / Math.max(valid, 1);
+  return {
+    samples: n, valid, meanY: round(meanY), minY: round(minY), maxY: round(maxY),
+    chroma: round(sumC / Math.max(valid, 1)),
+    unique: hashes.size, frozen: valid > 0 && hashes.size <= 1,
+    mostlyBlack: meanY < 8,
+  };
+}
+
+async function measureFps(ms = 800) {
+  if (!video.requestVideoFrameCallback) return null;
+  let count = 0, done = false;
+  const t0 = performance.now();
+  await new Promise((resolve) => {
+    const tick = () => {
+      if (done) return;
+      count++;
+      if (performance.now() - t0 < ms) video.requestVideoFrameCallback(tick);
+      else { done = true; resolve(); }
+    };
+    video.requestVideoFrameCallback(tick);
+    setTimeout(() => { if (!done) { done = true; resolve(); } }, ms + 300);
+  });
+  return round(count / ((performance.now() - t0) / 1000));
+}
+
+function fullSnapshot() {
+  if (!video.videoWidth || !video.videoHeight) return null;
+  const w = snapCanvas.width, h = snapCanvas.height;
+  const vw = video.videoWidth, vh = video.videoHeight;
+  const scale = Math.min(w / vw, h / vh);
+  const dw = Math.round(vw * scale), dh = Math.round(vh * scale);
+  snapCtx.fillStyle = "#000";
+  snapCtx.fillRect(0, 0, w, h);
+  snapCtx.drawImage(video, (w - dw) / 2, (h - dh) / 2, dw, dh);
+  return snapCanvas.toDataURL("image/jpeg", 0.6);
+}
+
+function trackInfo(track) {
+  if (!track) return null;
+  let settings = null, capabilities = null;
+  try { settings = track.getSettings ? track.getSettings() : null; } catch (e) {}
+  try { capabilities = track.getCapabilities ? track.getCapabilities() : null; } catch (e) {}
+  return {
+    label: track.label, readyState: track.readyState, muted: track.muted,
+    enabled: track.enabled, settings, capabilities,
+  };
+}
+
+// --- stream lifecycle -------------------------------------------------------
+async function openCamera(constraints, label) {
+  const t0 = performance.now();
+  const stream = await withTimeout(
+    navigator.mediaDevices.getUserMedia({ video: constraints, audio: false }),
+    15000, `${label}: getUserMedia`);
+  const gumMs = performance.now() - t0;
+  for (const t of stream.getVideoTracks()) {
+    t.addEventListener("ended", () => log(`${label}: track ended`, "warn"));
+    t.addEventListener("mute", () => log(`${label}: track muted`, "warn"));
+    t.addEventListener("unmute", () => log(`${label}: track unmuted`, "info"));
+  }
+  return { stream, gumMs };
+}
+
+function stopStream(stream) {
+  if (!stream) return;
+  for (const t of stream.getTracks()) { try { t.stop(); } catch (e) {} }
+}
+
+function stopCurrent() {
+  if (currentStream) stopStream(currentStream);
+  currentStream = null;
+  try { video.srcObject = null; } catch (e) {}
+}
+
+async function attach(stream) {
+  video.srcObject = stream;
+  try { await video.play(); } catch (e) { log("video.play(): " + e, "warn"); }
+  if (video.readyState < 2) {
+    try {
+      await withTimeout(new Promise((r) => video.addEventListener("loadeddata", r, { once: true })),
+        4000, "loadeddata");
+    } catch (e) { log(e.message, "warn"); }
+  }
+}
+
+function waitFrame(timeout = 4000) {
+  return new Promise((resolve, reject) => {
+    let done = false;
+    const timer = setTimeout(() => {
+      if (done) return; done = true; reject(new Error(`no frame within ${timeout} ms`));
+    }, timeout);
+    if (video.requestVideoFrameCallback) {
+      video.requestVideoFrameCallback((now, meta) => {
+        if (done) return; done = true; clearTimeout(timer); resolve({ now, meta });
+      });
+    } else {
+      const t0 = performance.now();
+      const poll = () => {
+        if (done) return;
+        if (video.readyState >= 2 && video.videoWidth) {
+          done = true; clearTimeout(timer); resolve({ fallback: true });
+        } else if (performance.now() - t0 > timeout) {
+          done = true; clearTimeout(timer); reject(new Error("no frame (fallback)"));
+        } else setTimeout(poll, 100);
+      };
+      poll();
+    }
+  });
+}
+
+async function measure(label, stream, gumMs) {
+  const entry = { label, at: new Date().toISOString(), gumMs: round(gumMs), requested: entryRequested[label] };
+  try {
+    const track = stream.getVideoTracks()[0];
+    if (!track) throw new Error("stream has no video track");
+    entry.trackBefore = trackInfo(track);
+    await attach(stream);
+    const t0 = performance.now();
+    try {
+      const f = await waitFrame(4000);
+      entry.firstFrameMs = round(performance.now() - t0);
+      if (f.meta) entry.presentedFrames = f.meta.presentedFrames;
+    } catch (e) {
+      entry.firstFrameError = errInfo(e);
+    }
+    await sleep(250);
+    entry.size = { width: video.videoWidth, height: video.videoHeight };
+    entry.frames = await sampleFrames(10, 80);
+    entry.fps = await measureFps(800);
+    entry.trackAfter = trackInfo(track);
+    const snap = fullSnapshot();
+    if (snap) {
+      entry.snapshot = snap;
+      report.snapshots.push({ label, dataUrl: snap });
+      if (report.snapshots.length > 24) report.snapshots.shift();
+    }
+    entry.ok = !entry.firstFrameError && entry.frames.valid > 0 &&
+               entry.frames.meanY > 3 && entry.frames.unique >= 2;
+  } catch (e) {
+    entry.error = errInfo(e);
+    entry.ok = false;
+  }
+  return entry;
+}
+
+async function openAndMeasure(label, constraints) {
+  stopCurrent();
+  await sleep(120);
+  entryRequested[label] = constraints;
+  try {
+    const r = await openCamera(constraints, label);
+    currentStream = r.stream;
+    const m = await measure(label, r.stream, r.gumMs);
+    m.requested = constraints;
+    return m;
+  } catch (e) {
+    return { label, requested: constraints, ok: false, error: errInfo(e) };
+  }
+}
+
+// --- tests ------------------------------------------------------------------
+async function runFull() {
+  if (running) return;
+  setBusy(true);
+  report.tests = []; report.snapshots = []; report.logs = [];
+  delete report.stress;
+  report.startedAt = new Date().toISOString();
+  report.note = $("#note").value || "";
+  $("#log").textContent = "";
+  try {
+    await environment();
+    report.devicesBefore = await enumerate();
+    log(`devices before permission: ${report.devicesBefore.length}`, report.devicesBefore.length ? "info" : "warn");
+
+    log("STEP permission + default camera", "step");
+    const first = await openCamera(true, "initial");
+    currentStream = first.stream;
+    const m0 = await measure("initial (default constraints)", first.stream, first.gumMs);
+    report.initial = m0;
+    report.tests.push({ name: "initial", ok: m0.ok, detail: m0 });
+    log(`initial: ${m0.ok ? "OK" : "FAIL"} ${JSON.stringify(m0.size || {})}`, m0.ok ? "ok" : "bad");
+
+    report.devices = await enumerate();
+    refreshDevices(report.devices);
+    log("devices after permission: " + report.devices.map((d) => `${d.label || "?"} [${d.deviceId}]`).join(" | "));
+    stopCurrent(); await sleep(500);
+
+    log("STEP each camera", "step");
+    for (const d of report.devices) {
+      const label = "camera: " + (d.label || d.deviceId);
+      const r = await openAndMeasure(label, {
+        deviceId: { exact: d.deviceId }, width: { ideal: 1280 }, height: { ideal: 720 },
+      });
+      report.tests.push({ name: "open " + short(d), ok: r.ok, detail: r, requested: r.requested });
+      log(`${label}: ${r.ok ? "OK" : "FAIL"}`, r.ok ? "ok" : "bad");
+      stopCurrent(); await sleep(400);
+    }
+
+    const { A, B } = pickPair(report.devices);
+    if (!A || !B) {
+      log("only one camera: switch tests skipped", "warn");
+    } else {
+      log(`STEP switching ${short(A)} <-> ${short(B)}`, "step");
+      for (let cycle = 1; cycle <= 2; cycle++) {
+        for (const [from, to] of [[A, B], [B, A]]) {
+          const r1 = await openAndMeasure(`c${cycle} ${short(from)}`, { deviceId: { exact: from.deviceId } });
+          stopCurrent(); await sleep(350);
+          const r2 = await openAndMeasure(`c${cycle} ${short(to)}`, { deviceId: { exact: to.deviceId } });
+          stopCurrent(); await sleep(350);
+          const ok = r1.ok && r2.ok;
+          report.tests.push({ name: `switch c${cycle} ${short(from)}->${short(to)}`, ok,
+                              from: short(from), to: short(to), first: r1, second: r2 });
+          log(`switch c${cycle} ${short(from)}->${short(to)}: ${ok ? "OK" : "FAIL"}`, ok ? "ok" : "bad");
+        }
+      }
+      await testApplyConstraints(A, B);
+      await testOverlap(A, B);
+      await testRepeated(A, 3);
+    }
+
+    log("STEP final enumerate", "step");
+    report.devicesAfter = await enumerate();
+    log(`devices after test: ${report.devicesAfter.length}`, "info");
+  } catch (e) {
+    report.fatal = errInfo(e);
+    log("FATAL: " + (e && e.message ? e.message : e), "bad");
+  } finally {
+    stopCurrent();
+    report.finishedAt = new Date().toISOString();
+    report.summary = summarize();
+    setBusy(false);
+    log(`done: ${report.summary.failed} failure(s) / ${report.summary.tests} test(s)`, report.summary.failed ? "bad" : "ok");
+    await sendReport();
+  }
+}
+
+async function testApplyConstraints(A, B) {
+  log(`STEP applyConstraints ${short(A)} -> ${short(B)}`, "step");
+  stopCurrent(); await sleep(200);
+  entryRequested["applyConstraints before"] = { deviceId: { exact: A.deviceId } };
+  const entry = { name: "applyConstraints", from: short(A), to: short(B) };
+  try {
+    const r = await openCamera({ deviceId: { exact: A.deviceId } }, "applyConstraints");
+    currentStream = r.stream;
+    entry.before = await measure("applyConstraints before", r.stream, r.gumMs);
+    const track = r.stream.getVideoTracks()[0];
+    const t0 = performance.now();
+    await withTimeout(track.applyConstraints({ deviceId: { exact: B.deviceId } }), 10000, "applyConstraints");
+    entry.appliedMs = round(performance.now() - t0);
+    await sleep(700);
+    entry.after = await measure("applyConstraints after", r.stream, 0);
+    const nowTrack = r.stream.getVideoTracks()[0] || track;
+    entry.track = trackInfo(nowTrack);
+    entry.switched = !!(entry.track && entry.track.settings &&
+                        entry.track.settings.deviceId === B.deviceId);
+    entry.ok = !!(entry.after && entry.after.ok);
+  } catch (e) {
+    entry.error = errInfo(e);
+  }
+  stopCurrent();
+  report.tests.push(entry);
+  log(`applyConstraints: ${entry.error ? "ERROR " + entry.error.name :
+       (entry.switched ? "switched" : "did not switch")}`, entry.ok ? "ok" : "warn");
+}
+
+async function testOverlap(A, B) {
+  log(`STEP overlap open ${short(A)} + ${short(B)}`, "step");
+  stopCurrent(); await sleep(200);
+  const entry = { name: "overlap open", from: short(A), to: short(B) };
+  try {
+    entryRequested["overlap A"] = { deviceId: { exact: A.deviceId } };
+    const a = await openCamera({ deviceId: { exact: A.deviceId } }, "overlap A");
+    currentStream = a.stream;
+    entry.first = await measure("overlap A", a.stream, a.gumMs);
+    let b = null;
+    try {
+      b = await withTimeout(navigator.mediaDevices.getUserMedia({
+        video: { deviceId: { exact: B.deviceId } }, audio: false,
+      }), 8000, "overlap B");
+    } catch (e) { entry.error = errInfo(e); }
+    entry.secondOpened = !!b;
+    if (b) {
+      await sleep(400);
+      entryRequested["overlap B"] = { deviceId: { exact: B.deviceId } };
+      entry.second = await measure("overlap B", b, 0);
+      stopStream(b);
+    }
+  } catch (e) {
+    entry.error = errInfo(e);
+  }
+  stopCurrent();
+  report.tests.push(entry);
+  log(`overlap: second camera ${entry.secondOpened ? "opened" : "failed (" +
+       (entry.error ? entry.error.name : "?") + ")"}`, "info");
+}
+
+async function testRepeated(A, n) {
+  log(`STEP repeated open/close ${short(A)} x${n}`, "step");
+  const cycles = []; let ok = true;
+  for (let i = 1; i <= n; i++) {
+    stopCurrent(); await sleep(250);
+    const label = `reopen ${i}`;
+    entryRequested[label] = { deviceId: { exact: A.deviceId }, width: { ideal: 640 }, height: { ideal: 480 } };
+    const c = { cycle: i };
+    try {
+      const r = await openCamera({ deviceId: { exact: A.deviceId },
+        width: { ideal: 640 }, height: { ideal: 480 } }, label);
+      currentStream = r.stream;
+      c.detail = await measure(label, r.stream, r.gumMs);
+      c.ok = c.detail.ok;
+    } catch (e) { c.error = errInfo(e); c.ok = false; }
+    stopCurrent();
+    if (!c.ok) ok = false;
+    cycles.push(c);
+    log(`reopen ${i}/${n}: ${c.ok ? "OK" : "FAIL" + (c.error ? " " + c.error.name : "")}`,
+        c.ok ? "ok" : "bad");
+  }
+  report.tests.push({ name: "repeated open/close", camera: short(A), cycles, ok });
+}
+
+async function runStress() {
+  if (running) return;
+  setBusy(true);
+  report.stress = { startedAt: new Date().toISOString(), switches: [] };
+  report.note = $("#note").value || "";
+  try {
+    if (!report.devices || !report.devices.length) {
+      await environment();
+      const r = await openCamera(true, "stress permission");
+      currentStream = r.stream;
+      await attach(r.stream);
+      report.devices = await enumerate();
+      refreshDevices(report.devices);
+      stopCurrent(); await sleep(300);
+    }
+    const { A, B } = pickPair(report.devices);
+    if (!A || !B) { log("stress needs two cameras", "warn"); return; }
+    let cur = A, ok = true;
+    for (let i = 1; i <= 10; i++) {
+      const other = cur === A ? B : A;
+      const label = `stress ${i} ${short(other)}`;
+      entryRequested[label] = { deviceId: { exact: other.deviceId } };
+      const started = performance.now();
+      let r;
+      try {
+        r = await openCamera({ deviceId: { exact: other.deviceId } }, label);
+        currentStream = r.stream;
+        const m = await measure(label, r.stream, r.gumMs);
+        r.measure = m;
+        r.ok = m.ok;
+      } catch (e) { r = { ok: false, error: errInfo(e) }; }
+      stopCurrent(); await sleep(250);
+      const rec = { n: i, camera: short(other), ok: r.ok,
+                    ms: round(performance.now() - started), error: r.error || null,
+                    detail: r.measure || null };
+      report.stress.switches.push(rec);
+      if (!r.ok) ok = false;
+      log(`stress ${i}/10 ${short(other)}: ${r.ok ? "OK" : "FAIL" +
+           (r.error ? " " + r.error.name : "")} (${rec.ms} ms)`, r.ok ? "ok" : "bad");
+      cur = other;
+    }
+    report.stress.ok = ok;
+  } catch (e) {
+    report.stress.error = errInfo(e);
+    log("stress FATAL: " + e, "bad");
+  } finally {
+    stopCurrent();
+    report.stress.finishedAt = new Date().toISOString();
+    setBusy(false);
+    await sendReport();
+  }
+}
+
+function summarize() {
+  const tests = report.tests || [];
+  const failed = tests.filter((t) => t.ok === false);
+  const stress = (report.stress && report.stress.switches) || [];
+  const stressFailed = stress.filter((s) => s.ok === false);
+  return {
+    tests: tests.length,
+    failed: failed.length + stressFailed.length,
+    failedNames: failed.map((t) => t.name).concat(stressFailed.map((s) => `stress #${s.n}`)),
+    stressSwitches: stress.length,
+    stressFailed: stressFailed.length,
+    snapshots: (report.snapshots || []).length,
+  };
+}
+
+// --- reporting --------------------------------------------------------------
+async function sendReport() {
+  if (!report.finishedAt && !report.stress) report.finishedAt = new Date().toISOString();
+  report.summary = summarize();
+  try {
+    const res = await fetch("report", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(report),
+    });
+    const txt = await res.text();
+    report.sent = { ok: res.ok, response: txt.trim() };
+    log("report sent: " + txt.trim(), res.ok ? "ok" : "warn");
+  } catch (e) {
+    report.sent = { ok: false, error: String(e) };
+    log("report POST failed (use Download JSON): " + e, "warn");
+  }
+}
+
+function downloadReport() {
+  report.note = $("#note").value || "";
+  const blob = new Blob([JSON.stringify(report, null, 2)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `camera-report-${runId}.json`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  log("downloaded camera-report-" + runId + ".json", "ok");
+}
+
+// --- manual buttons ---------------------------------------------------------
+$("#run").addEventListener("click", runFull);
+$("#stress").addEventListener("click", runStress);
+$("#download").addEventListener("click", downloadReport);
+$("#send").addEventListener("click", sendReport);
+$("#stop").addEventListener("click", () => { stopCurrent(); log("stopped by user", "warn"); });
+
+$("#snap").addEventListener("click", () => {
+  const snap = fullSnapshot();
+  if (!snap) { log("no frame to snapshot", "warn"); return; }
+  const label = "manual " + new Date().toLocaleTimeString();
+  report.snapshots.push({ label, dataUrl: snap });
+  log("snapshot taken: " + label, "ok");
+});
+
+$("#open").addEventListener("click", async () => {
+  const id = $("#devices").value;
+  if (!id) { log("no device selected", "warn"); return; }
+  if (running) return;
+  setBusy(true);
+  try {
+    const label = "manual " + (report.devices.find((d) => d.deviceId === id)?.label || id);
+    const r = await openAndMeasure(label, { deviceId: { exact: id } });
+    report.tests.push({ name: label, ok: r.ok, detail: r, requested: r.requested });
+    log(`${label}: ${r.ok ? "OK" : "FAIL"}`, r.ok ? "ok" : "bad");
+  } finally { stopCurrent(); setBusy(false); }
+});
+
+window.addEventListener("error", (e) => log("window.error: " + e.message, "bad"));
+window.addEventListener("unhandledrejection", (e) => log("unhandledrejection: " + (e.reason && e.reason.message || e.reason), "bad"));
+
+log("page ready. Press “Run full test”.");
+if (window.isSecureContext === false) {
+  $("#envline").innerHTML = '<span class="pill" style="color:var(--bad)">page is not a secure context — ' +
+    'getUserMedia will fail</span> Open it via HTTPS (the bundled server does that).';
+}
+</script>
+</body>
+</html>
