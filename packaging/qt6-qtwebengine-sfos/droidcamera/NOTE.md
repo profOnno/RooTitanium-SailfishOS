@@ -110,18 +110,20 @@ nothing.
 
 ## Status
 
-**Written on 2026-11-03, NEVER COMPILED AND NEVER RUN.** There is no Chromium
-build tree on this machine (only the shallow clone of the Qt meta-repo), so the
-first real round is:
+**Written 2026-11-03. Compiled on 2026-11-04 into QtWebEngine 6.140
+(aarch64); never run on a device yet.**
 
-```sh
-ARCH=aarch64 ./scripts/apply-droidcamera.sh
-ARCH=aarch64 ./scripts/apply-build-fixes.sh ninja
-# then the normal build (configure-6.140.sh / build-con-guardia.sh)
-```
+The first real compile found two errors, both fixed:
 
-Expect compile errors: the Chromium 140 APIs were checked by hand against
-upstream sources, but a hand check is not a compiler.
+- `base::EqualsCaseInsensitive` no longer exists in Chromium 140 →
+  `EqualsCaseInsensitiveASCII` (the values are ASCII format names);
+- `ParseSize` was defined in both camera .cc files, and `capture_lib` is a
+  jumbo target, so they land in the same translation unit → the factory's
+  helper is now `ParsePreviewSize`.
+
+The engine builds cleanly (`libQt6WebEngineCore.so.6.140.0`, 275 MB) and the
+installed library contains the camera log strings. Next: bundle + device test
+(see `Documentation/TASK-camera.md`).
 
 ## Diagnostics
 

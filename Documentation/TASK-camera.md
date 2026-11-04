@@ -88,9 +88,13 @@ four layouts before writing the C++.
   `sailfishos/gst-droid`, `sailfishos/gecko-camera`, Chromium 140 and libyuv.
 - Sources, GN wiring and factory hook written.
 
-### Phase 1 — compile: ⬜ to do
-Expected failures are API drift, not design. Fast iteration: rebuild only the
-jumbo unit that contains the capture sources, not the whole engine.
+### Phase 1 — compile: ✅ done (2026-11-04)
+QtWebEngine 6.140 (aarch64) built and installed with the camera code in
+`libQt6WebEngineCore.so.6.140.0`. Two compile errors surfaced and were fixed:
+`base::EqualsCaseInsensitive` was removed in Chromium 140 (use
+`EqualsCaseInsensitiveASCII`), and the two camera .cc files share a jumbo
+translation unit, so their `ParseSize` helpers had to be renamed. The
+`webengine-smoke` binary against the installed engine also builds.
 
 ### Phase 2 — device test: ⬜ to do
 Test page (local file, no network):
