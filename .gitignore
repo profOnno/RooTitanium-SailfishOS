@@ -25,3 +25,15 @@ smoke-test/main.moc
 
 # Clone upstream Qt per l'aggiornamento del motore (shallow, ~decine di GB)
 /qtwebengine-6.8.4/
+
+# Dati locali del test camera (referti, clip, certificati self-signed).
+# Il repo e' pubblico: non devono mai entrarci.
+/tools/camera-test/reports/
+/tools/camera-test/cert.pem
+/tools/camera-test/key.pem
+/cert.pem
+/key.pem
+*.log
+*.pem
+*.key
+*.webm

@@ -22,7 +22,7 @@ you download).
 ## Run it
 
 On a machine the phone can reach on the same Wi-Fi (the LXD **host** is the easy
-choice; the container itself sits behind NAT at `10.x.x.x`):
+choice; the container itself sits behind NAT):
 
 ```sh
 cd tools/camera-test
