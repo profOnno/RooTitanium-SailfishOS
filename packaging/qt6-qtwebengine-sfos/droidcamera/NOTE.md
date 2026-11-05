@@ -151,11 +151,14 @@ The second device log (with INFO enabled) showed the real failure:
   teardown error was racing with `running_ = false`, which was written without
   the Ponte lock.
 
-Fixes in 2.9.2-5:
+Fixes in 2.9.2-5/6:
 
-- `QueryPreviewFormats()` no longer opens the camera. It advertises the two
-  verified sizes (640x480, 1280x720); `ConfigureCamera()` still negotiates the
-  real one. Enumeration can no longer evict a live call.
+- `QueryPreviewFormats()` no longer opens the camera. Enumeration can no longer
+  evict a live call. Before the first capture it advertises two universal sizes
+  (640x480, 1280x720); `ConfigureCamera()` then parses the vendor's real
+  `preview-size-values` and `CachePreviewFormats()` stores them, so
+  `GetDevicesInfo()` publishes the real capabilities from the next enumeration
+  on — on any phone, without an extra open.
 - `StopAndDeAllocate()` calls `Ponte::StopRunning()`, which sets `running_ =
   false` while holding the callback lock, so an in-flight teardown error is
   ignored instead of calling `FailFrame()`.

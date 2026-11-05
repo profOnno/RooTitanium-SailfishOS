@@ -11,6 +11,8 @@
 
 #include "media/capture/video/video_capture_device_factory.h"
 
+#include <string>
+
 namespace media {
 
 class DroidVideoCaptureDeviceFactory : public VideoCaptureDeviceFactory {
@@ -32,6 +34,15 @@ class DroidVideoCaptureDeviceFactory : public VideoCaptureDeviceFactory {
       const VideoCaptureDeviceDescriptor& device_descriptor) override;
   void GetDevicesInfo(GetDevicesInfoCallback callback) override;
 };
+
+// Updates the cached preview formats for |camera_index| from the vendor's
+// parameter string (the same one read by
+// DroidVideoCaptureDevice::ConfigureCamera). GetDevicesInfo() uses this cache
+// instead of opening the camera, because opening it while a call is live
+// evicts the session (CAMERA_ERROR_EVICTED, 0 frames). Called after the camera
+// has been opened for capture, so the vendor list is real but costs no extra
+// open.
+void CachePreviewFormats(int camera_index, const std::string& parameters);
 
 }  // namespace media
 

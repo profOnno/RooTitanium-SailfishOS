@@ -133,10 +133,13 @@ passano. Risultati:
   era silenzioso (probabilmente l'utente non parlava in quella fase): da
   ripetere parlando durante tutto il test.
 
-Correzioni in 2.9.2-5: `GetDevicesInfo()` non apre più la camera (lista fissa
-640×480/1280×720; `ConfigureCamera()` negozia comunque la vera risoluzione) e
-`StopAndDeAllocate()` azzera `running_` sotto il lock della `Ponte`, così un
-errore del vendor in chiusura non arriva più a Chromium come errore fatale.
+Correzioni in 2.9.2-5/6: `GetDevicesInfo()` non apre più la camera.
+Inizialmente pubblica due risoluzioni universali (640×480/1280×720); dopo la
+prima apertura `ConfigureCamera()` salva i `preview-size-values` reali del
+vendor (`CachePreviewFormats`) e le enumerazioni successive pubblicano quelli,
+senza aprire la camera. `StopAndDeAllocate()` azzera `running_` sotto il lock
+della `Ponte`, così un errore del vendor in chiusura non arriva più a Chromium
+come errore fatale.
 
 Retest con 2.9.2-5: Jitsi (switch anteriore/posteriore durante la chiamata) e
 `tools/camera-test` per audio+video. Il launcher abilita gli INFO di Chromium

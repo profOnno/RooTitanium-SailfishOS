@@ -20,6 +20,7 @@
 #include "base/strings/string_util.h"
 #include "base/time/time.h"
 #include "media/base/video_frame_metadata.h"
+#include "media/capture/video/droidmedia/droid_video_capture_device_factory.h"
 #include "third_party/libyuv/include/libyuv.h"
 #include "ui/gfx/color_space.h"
 #include "ui/gfx/geometry/rect.h"
@@ -270,6 +271,11 @@ bool DroidVideoCaptureDevice::ConfigureCamera() {
   }
   std::string params(raw);
   free(raw);
+  // The camera is open now, so this costs nothing and does not evict anyone:
+  // remember the real preview sizes for GetDevicesInfo() (which must not open
+  // the camera itself). On other phones this is what makes the advertised
+  // formats adapt to the vendor.
+  CachePreviewFormats(camera_index_, params);
 
   int width = requested_size_.width();
   int height = requested_size_.height();

@@ -9,12 +9,15 @@
 #include <string.h>
 
 #include <string>
+#include <map>
 #include <utility>
 #include <vector>
 
 #include "base/logging.h"
 #include "base/strings/string_number_conversions.h"
+#include "base/strings/string_split.h"
 #include "base/strings/string_util.h"
+#include "base/synchronization/lock.h"
 #include "media/capture/video/droidmedia/droid_video_capture_device.h"
 #include "ui/gfx/geometry/size.h"
 
@@ -36,14 +39,71 @@ constexpr char kDroidMedia[] = "libdroidmedia.so";
 // and CreateDevice (and the page sees it in getSettings()).
 constexpr char kDeviceIdPrefix[] = "droidmedia:";
 
-// Do NOT open the camera here. GetDevicesInfo() runs on every
-// enumerateDevices(), and Jitsi/Meet call it while a call is already live.
-// Opening the HAL just to read preview-size-values evicts the active session
-// (CAMERA_ERROR_EVICTED, 0 frames), which is exactly the camera-switch failure
-// seen on the Xperia 10 V. Advertise the resolutions verified on that device;
-// the real size is negotiated in ConfigureCamera().
+// Capabilities are not an endless list: the browser does not use more than
+// about a dozen.
+constexpr size_t kMaxCachedFormats = 12;
+
+// Real preview sizes read from the vendor, per camera index. Filled by
+// CachePreviewFormats() after a camera has been opened for capture, never by
+// GetDevicesInfo(): opening the HAL during enumerateDevices() (Jitsi does it
+// while a call is live) evicts the active session with CAMERA_ERROR_EVICTED.
+base::Lock g_formats_lock;
+std::map<int, VideoCaptureFormats> g_formats_cache;
+
+VideoCaptureFormats ParsePreviewFormats(const std::string& params) {
+  VideoCaptureFormats formats;
+  std::string sizes;
+  for (const std::string& token :
+       base::SplitString(params, ";", base::TRIM_WHITESPACE,
+                         base::SPLIT_WANT_NONEMPTY)) {
+    const std::string prefix = "preview-size-values=";
+    if (base::StartsWith(token, prefix, base::CompareCase::SENSITIVE)) {
+      sizes = token.substr(prefix.size());
+      break;
+    }
+  }
+
+  std::vector<std::pair<int, int>> seen;
+  for (const std::string& token :
+       base::SplitString(sizes, ",", base::TRIM_WHITESPACE,
+                         base::SPLIT_WANT_NONEMPTY)) {
+    int width = 0;
+    int height = 0;
+    if (sscanf(token.c_str(), "%dx%d", &width, &height) != 2 || width < 2 ||
+        height < 2 || width > 1920 || height > 1080) {
+      continue;
+    }
+    bool duplicate = false;
+    for (const auto& s : seen) {
+      if (s.first == width && s.second == height) {
+        duplicate = true;
+        break;
+      }
+    }
+    if (duplicate) {
+      continue;
+    }
+    seen.emplace_back(width, height);
+    formats.emplace_back(gfx::Size(width, height), 30.0f, PIXEL_FORMAT_I420);
+    if (formats.size() >= kMaxCachedFormats) {
+      break;
+    }
+  }
+  return formats;
+}
+
 VideoCaptureFormats QueryPreviewFormats(int camera_index) {
-  (void)camera_index;
+  {
+    base::AutoLock lock(g_formats_lock);
+    auto it = g_formats_cache.find(camera_index);
+    if (it != g_formats_cache.end() && !it->second.empty()) {
+      return it->second;
+    }
+  }
+  // Not opened yet in this process (or the vendor reported no sizes). Do not
+  // open it here: two sizes supported by virtually every HAL keep
+  // getCapabilities() useful; ConfigureCamera() picks the real one and
+  // CachePreviewFormats() replaces this list after the first capture.
   VideoCaptureFormats formats;
   formats.emplace_back(gfx::Size(640, 480), 30.0f, PIXEL_FORMAT_I420);
   formats.emplace_back(gfx::Size(1280, 720), 30.0f, PIXEL_FORMAT_I420);
@@ -51,6 +111,15 @@ VideoCaptureFormats QueryPreviewFormats(int camera_index) {
 }
 
 }  // namespace
+
+void CachePreviewFormats(int camera_index, const std::string& parameters) {
+  VideoCaptureFormats formats = ParsePreviewFormats(parameters);
+  if (formats.empty()) {
+    return;
+  }
+  base::AutoLock lock(g_formats_lock);
+  g_formats_cache[camera_index] = std::move(formats);
+}
 
 // static
 bool DroidVideoCaptureDeviceFactory::IsSupported() {
