@@ -113,7 +113,7 @@ translation unit, so their `ParseSize` helpers had to be renamed. The
 - RPM `harbour-rootitanium-2.9.2-5.aarch64.rpm` (115 MB) costruito e verificato:
   payload identico al bundle, plugin nuovo incluso.
 
-### Phase 2 — device test: 🟡 in corso (2026-11-04/05)
+### Phase 2 — device test: ✅ camera + microfono verificati (2026-11-05, 2.9.2-6)
 Primo giro con `tools/camera-test` sull'Xperia 10 V: entrambe le camere si
 aprono, immagine dritta e colori giusti; posteriore ~30 fps, anteriore
 ~15–16 fps; 1280×720 e 480×640 funzionano; switch sequenziali e riaperture
@@ -145,6 +145,22 @@ Retest con 2.9.2-5: Jitsi (switch anteriore/posteriore durante la chiamata) e
 `tools/camera-test` per audio+video. Il launcher abilita gli INFO di Chromium
 quando `DEBUG` esiste; il server di test HTTPS self-signed richiede il marker
 `/home/rootitanium/ALLOW_BAD_CERT` (2.9.2-3+), da rimuovere subito dopo.
+
+**Retest 2026-11-05 con 2.9.2-6 — passa:**
+- `camera-test`: full test 10 test, unico "failed" è `applyConstraints`
+  (`OverconstrainedError`, limite di Chromium, non usato da Jitsi); stress ×10
+  **10/10**.
+- Jitsi: quattro switch anteriore↔posteriore nella stessa sessione, **0
+  `vendor error`, 0 sessioni a 0 frame**. Il vecchio `CAMERA_ERROR_EVICTED`
+  durante `enumerateDevices` non si presenta più.
+- Formati adattivi: dopo la prima apertura la posteriore pubblica
+  `getCapabilities` fino a 1920×1080, l'anteriore 1280×720 (prima del primo
+  capture il fallback è 1280×720).
+- Microfono: audio-only picco −12.4 dBFS; audio+video picco −20.8 dBFS (30%
+  silenzioso, l'utente parlava), clip WebM 48.6 KB. Funziona in entrambe le
+  modalità.
+- Restano da provare: fallback `RT_DROIDMEDIA_CAMERA=0` (V4L2), sessioni molto
+  lunghe/leak, formati tiled di altri vendor.
 
 Test page (local file, no network):
 

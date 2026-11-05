@@ -166,6 +166,12 @@ Fixes in 2.9.2-5/6:
 The audio side was tested too: audio-only capture works (peak −5.2 dBFS, 3 s
 WebM clip); audio+video opens both tracks. See `tools/camera-test`.
 
+Retest 2026-11-05 with 2.9.2-6: four Jitsi front↔back switches, **0 vendor
+errors and 0 zero-frame sessions**. Adaptive formats worked (back camera
+`getCapabilities` max 1920×1080 after the first capture, front 1280×720).
+Microphone: audio-only peak −12.4 dBFS, combined audio+video peak −20.8 dBFS
+(30% silent, the user was speaking), 48.6 KB WebM clip.
+
 The first real compile found two errors, both fixed:
 
 - `base::EqualsCaseInsensitive` no longer exists in Chromium 140 →
