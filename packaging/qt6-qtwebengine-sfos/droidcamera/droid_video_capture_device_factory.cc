@@ -14,7 +14,6 @@
 
 #include "base/logging.h"
 #include "base/strings/string_number_conversions.h"
-#include "base/strings/string_split.h"
 #include "base/strings/string_util.h"
 #include "media/capture/video/droidmedia/droid_video_capture_device.h"
 #include "ui/gfx/geometry/size.h"
@@ -37,62 +36,17 @@ constexpr char kDroidMedia[] = "libdroidmedia.so";
 // and CreateDevice (and the page sees it in getSettings()).
 constexpr char kDeviceIdPrefix[] = "droidmedia:";
 
-// Capabilities are not an endless list: the browser does not use more than
-// about a dozen, and enumeration (which opens the camera) would get slow.
-constexpr size_t kMaxFormats = 12;
-
-bool ParsePreviewSize(const std::string& text, int* width, int* height) {
-  return sscanf(text.c_str(), "%dx%d", width, height) == 2 && *width > 0 &&
-         *height > 0;
-}
-
-// The camera is opened once, its parameters are read, then it is closed: this
-// fills supported_formats with the device's REAL resolutions instead of a
-// hardcoded list that would be wrong on half the ports.
+// Do NOT open the camera here. GetDevicesInfo() runs on every
+// enumerateDevices(), and Jitsi/Meet call it while a call is already live.
+// Opening the HAL just to read preview-size-values evicts the active session
+// (CAMERA_ERROR_EVICTED, 0 frames), which is exactly the camera-switch failure
+// seen on the Xperia 10 V. Advertise the resolutions verified on that device;
+// the real size is negotiated in ConfigureCamera().
 VideoCaptureFormats QueryPreviewFormats(int camera_index) {
+  (void)camera_index;
   VideoCaptureFormats formats;
-  DroidMediaCamera* camera = droid_media_camera_connect(camera_index);
-  if (!camera) {
-    return formats;
-  }
-  char* raw = droid_media_camera_get_parameters(camera);
-  const std::string params = raw ? raw : std::string();
-  free(raw);
-  droid_media_camera_disconnect(camera);
-
-  std::string sizes;
-  for (const std::string& token :
-       base::SplitString(params, ";", base::TRIM_WHITESPACE,
-                         base::SPLIT_WANT_NONEMPTY)) {
-    const std::string prefix = "preview-size-values=";
-    if (base::StartsWith(token, prefix, base::CompareCase::SENSITIVE)) {
-      sizes = token.substr(prefix.size());
-      break;
-    }
-  }
-
-  for (const std::string& token :
-       base::SplitString(sizes, ",", base::TRIM_WHITESPACE,
-                         base::SPLIT_WANT_NONEMPTY)) {
-    int width = 0;
-    int height = 0;
-    if (!ParsePreviewSize(token, &width, &height) || width > 1920 ||
-        height > 1080) {
-      continue;
-    }
-    formats.emplace_back(gfx::Size(width, height), 30.0f, PIXEL_FORMAT_I420);
-    if (formats.size() >= kMaxFormats) {
-      break;
-    }
-  }
-
-  // If the vendor lists nothing (or the camera was busy) offer two standard
-  // formats: an approximate capability is better than none, because with an
-  // empty list getCapabilities() proposes nothing to the page.
-  if (formats.empty()) {
-    formats.emplace_back(gfx::Size(640, 480), 30.0f, PIXEL_FORMAT_I420);
-    formats.emplace_back(gfx::Size(1280, 720), 30.0f, PIXEL_FORMAT_I420);
-  }
+  formats.emplace_back(gfx::Size(640, 480), 30.0f, PIXEL_FORMAT_I420);
+  formats.emplace_back(gfx::Size(1280, 720), 30.0f, PIXEL_FORMAT_I420);
   return formats;
 }
 

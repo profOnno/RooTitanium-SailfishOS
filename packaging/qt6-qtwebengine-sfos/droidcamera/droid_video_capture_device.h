@@ -77,6 +77,18 @@ class DroidVideoCaptureDevice : public VideoCaptureDevice {
       device_ = nullptr;
     }
 
+    // Stops accepting frames/errors while holding the callback lock. Any
+    // callback already running finishes first; every later one sees
+    // running_ == false and is ignored. StopAndDeAllocate calls this before
+    // stop_preview, so a vendor CAMERA_ERROR_EVICTED fired by the HAL while
+    // closing the session cannot become a fatal error for the client.
+    void StopRunning() {
+      base::AutoLock lock(lock_);
+      if (device_) {
+        device_->running_ = false;
+      }
+    }
+
     template <typename F>
     void Run(F function) {
       base::AutoLock lock(lock_);

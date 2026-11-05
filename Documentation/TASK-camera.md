@@ -110,28 +110,38 @@ translation unit, so their `ParseSize` helpers had to be renamed. The
   `droidmedia camera`. L'assembler ora riprende sempre `test.qml`, `run.sh`,
   `Readability.js` e l'icona dal repo, così lo staging di una release vecchia
   non fa regredire l'app.
-- RPM `harbour-rootitanium-2.9.2-2.aarch64.rpm` (115 MB) costruito e verificato:
+- RPM `harbour-rootitanium-2.9.2-5.aarch64.rpm` (115 MB) costruito e verificato:
   payload identico al bundle, plugin nuovo incluso.
 
-### Phase 2 — device test: 🟡 first run done (2026-11-04), retest after the fix
-First run with `tools/camera-test` on the Xperia 10 V: both cameras open, image
-upright and correct; back ~30 fps, front ~15–16 fps; 1280×720 and 480×640 both
-work; sequential switches and repeated open/close pass. Two findings:
+### Phase 2 — device test: 🟡 in corso (2026-11-04/05)
+Primo giro con `tools/camera-test` sull'Xperia 10 V: entrambe le camere si
+aprono, immagine dritta e colori giusti; posteriore ~30 fps, anteriore
+~15–16 fps; 1280×720 e 480×640 funzionano; switch sequenziali e riaperture
+passano. Risultati:
 
-- `applyConstraints({deviceId})` → `OverconstrainedError`: Chromium does not
-  switch the device of a live track this way (expected; Jitsi normally replaces
-  the track with a new `getUserMedia`).
-- the native log had `vendor error: 2` (`CAMERA_ERROR_EVICTED`) exactly at the
-  switches. The HAL emits it while the session is being closed; the code was
-  reporting it to Chromium as a fatal capture error, which can leave the next
-  preview black/frozen. Fixed in `droid_video_capture_device.cc`: errors are
-  ignored when `running_` is false (teardown). Rebuilt in 2.9.2-4.
+- `applyConstraints({deviceId})` → `OverconstrainedError`: Chromium non cambia
+  device di una track viva così (atteso; Jitsi usa una nuova `getUserMedia`).
+- **Jitsi**: il log con INFO ha mostrato `enumerateDevices()` durante la
+  chiamata. `GetDevicesInfo()` apriva entrambe le camere per leggere le
+  risoluzioni: la HAL mandava in eviction la sessione viva
+  (`CAMERA_ERROR_EVICTED`, 0 frame) e il successivo `getUserMedia` della
+  posteriore partiva, prendeva errore 2 e non consegnava frame → «Back camera
+  doesn't work. Front works». Il primo switch verso l'anteriore prendeva 0
+  frame e solo il retry funzionava.
+- **Audio**: il microfono funziona (picco −5.2 dBFS, clip WebM di 3 s);
+  audio+video apre entrambe le track. Nel test combinato il livello misurato
+  era silenzioso (probabilmente l'utente non parlava in quella fase): da
+  ripetere parlando durante tutto il test.
 
-Retest with 2.9.2-4 and the **Switch ×10** button; the launcher now enables
-Chromium INFO logs when `DEBUG` exists, so the log includes
-`requested`/`preview`/`first frame`/`stopped` around each error. Il server di
-test è HTTPS self-signed: serve il marker `/home/rootitanium/ALLOW_BAD_CERT`
-(dall'RPM 2.9.2-3), da rimuovere subito dopo il test.
+Correzioni in 2.9.2-5: `GetDevicesInfo()` non apre più la camera (lista fissa
+640×480/1280×720; `ConfigureCamera()` negozia comunque la vera risoluzione) e
+`StopAndDeAllocate()` azzera `running_` sotto il lock della `Ponte`, così un
+errore del vendor in chiusura non arriva più a Chromium come errore fatale.
+
+Retest con 2.9.2-5: Jitsi (switch anteriore/posteriore durante la chiamata) e
+`tools/camera-test` per audio+video. Il launcher abilita gli INFO di Chromium
+quando `DEBUG` esiste; il server di test HTTPS self-signed richiede il marker
+`/home/rootitanium/ALLOW_BAD_CERT` (2.9.2-3+), da rimuovere subito dopo.
 
 Test page (local file, no network):
 

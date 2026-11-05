@@ -518,7 +518,9 @@ void DroidVideoCaptureDevice::StopAndDeAllocate() {
   if (!ponte_) {
     return;
   }
-  running_ = false;
+  // Set running_ = false under the Ponte lock: a vendor error fired by
+  // stop_preview/disconnect must not reach FailFrame (camera switch).
+  ponte_->StopRunning();
   CloseCamera();
   ponte_->Detach();
   ponte_.reset();

@@ -137,6 +137,32 @@ The launcher now adds `--enable-logging=stderr --log-level=0` when
 `/home/rootitanium/DEBUG` exists, so the next log also contains `requested`,
 `preview`, `first frame` and `stopped`, not just the ERROR lines.
 
+### Jitsi / Meet camera switch (2026-11-05)
+
+The second device log (with INFO enabled) showed the real failure:
+
+- `GetDevicesInfo()` opened **both** cameras to read `preview-size-values`.
+  Jitsi calls `enumerateDevices()` during a call, so each enumeration
+  opened/closed the HAL and evicted the live session
+  (`CAMERA_ERROR_EVICTED`, 0 frames). The next `getUserMedia` for the back
+  camera then started, got error 2 after ~150 ms and delivered 0 frames:
+  "Back camera doesn't work. Front works".
+- The first front-camera switch also got 0 frames, then a retry worked; the
+  teardown error was racing with `running_ = false`, which was written without
+  the Ponte lock.
+
+Fixes in 2.9.2-5:
+
+- `QueryPreviewFormats()` no longer opens the camera. It advertises the two
+  verified sizes (640x480, 1280x720); `ConfigureCamera()` still negotiates the
+  real one. Enumeration can no longer evict a live call.
+- `StopAndDeAllocate()` calls `Ponte::StopRunning()`, which sets `running_ =
+  false` while holding the callback lock, so an in-flight teardown error is
+  ignored instead of calling `FailFrame()`.
+
+The audio side was tested too: audio-only capture works (peak −5.2 dBFS, 3 s
+WebM clip); audio+video opens both tracks. See `tools/camera-test`.
+
 The first real compile found two errors, both fixed:
 
 - `base::EqualsCaseInsensitive` no longer exists in Chromium 140 →
